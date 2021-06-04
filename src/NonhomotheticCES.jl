@@ -59,13 +59,18 @@ function bisection(f, a::T, fa::T, b::T, fb::T, xtol, max_iterations) where {T}
     error("too many iterations")
 end
 
-function calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s)
-    f(Ĉ) = logsumexp((Ĉ .* ϵs .+ p̂s) .* (1 - σ) + Ω̂s) / (1 - σ) - Ê
+function calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = 0x1p-10)
+    f(Ĉ) = logsumexp((Ĉ .* ϵs .+ p̂s) .* (1 - σ) .+ Ω̂s) / (1 - σ) - Ê
     Ĉ0 = (Ê - mean(Ω̂s) / (1 - σ) - mean(p̂s)) / mean(ϵs)
     Ĉ1, fĈ1, Ĉ2, fĈ2 = bracket_increasing(f, Ĉ0, 1.0, 2.0, 50)
-    Ĉ, r = bisection(f, Ĉ1, fĈ1, Ĉ2, fĈ2, 0x1p-10, 30)
+    Ĉ, r = bisection(f, Ĉ1, fĈ1, Ĉ2, fĈ2, Ĉtol, 50)
     # FIXME check residual r?
     Ĉ
+end
+
+function ∂Ĉ∂Ê(Ĉ, Ê, σ, Ω̂s, ϵs, p̂s)
+    # FIXME reuse common terms in exponential
+    exp((1 - σ) * Ê - logsumexp((Ĉ .* ϵs .+ p̂s) .* (1 - σ) .+ Ω̂s .+ log.(ϵs)))
 end
 
 end # module
