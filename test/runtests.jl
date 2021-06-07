@@ -10,9 +10,7 @@ function random_parameters(::Val{N}) where N
      p̂s = randn(SVector{N}))
 end
 
-function ∂(f, x; h = 0.01)
-    central_fdm(20, 1)(f, x, h)
-end
+∂(f, x) = central_fdm(5, 1; factor = 1e6)(f, x)
 
 @testset "finding Ĉ" begin
     for _ in 1:100
