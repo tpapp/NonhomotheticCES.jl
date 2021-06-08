@@ -61,7 +61,7 @@ end
 
 function calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = 0x1p-10, skipcheck::Bool = false)
     if !skipcheck
-        @argcheck σ > 0 && all(ϵs .> 0)
+        @argcheck σ > 0 && σ ≠ 1 && all(ϵs .> 0)
     end
     f(Ĉ) = logsumexp((Ĉ .* ϵs .+ p̂s) .* (1 - σ) .+ Ω̂s) / (1 - σ) - Ê
     Ĉ0 = (Ê - mean(Ω̂s) / (1 - σ) - mean(p̂s)) / mean(ϵs)
