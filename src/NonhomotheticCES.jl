@@ -90,4 +90,6 @@ calculate_∂ϵs(∂p̂s, Ĉ) = Ĉ .* ∂p̂s
 
 calculate_∂Ω̂s(∂p̂s, σ) = ∂p̂s ./ (1 - σ)
 
+calculate_∂σ(Zs, Ĉ, Ê, σ, ϵs, p̂s) = (Ĉ + sum(Zs .* (p̂s .- Ê)) / sum(Zs .* ϵs)) / (1 - σ)
+
 end # module
