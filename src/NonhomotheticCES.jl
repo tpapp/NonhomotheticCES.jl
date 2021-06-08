@@ -59,7 +59,10 @@ function bisection(f, a::T, fa::T, b::T, fb::T, xtol, max_iterations) where {T}
     error("too many iterations")
 end
 
-function calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = 0x1p-10)
+function calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = 0x1p-10, skipcheck::Bool = false)
+    if !skipcheck
+        @argcheck σ > 0 && all(ϵs .> 0)
+    end
     f(Ĉ) = logsumexp((Ĉ .* ϵs .+ p̂s) .* (1 - σ) .+ Ω̂s) / (1 - σ) - Ê
     Ĉ0 = (Ê - mean(Ω̂s) / (1 - σ) - mean(p̂s)) / mean(ϵs)
     Ĉ1, fĈ1, Ĉ2, fĈ2 = bracket_increasing(f, Ĉ0, 1.0, 2.0, 50)
@@ -68,9 +71,23 @@ function calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = 0x1p-10)
     Ĉ
 end
 
-function ∂Ĉ∂Ê(Ĉ, Ê, σ, Ω̂s, ϵs, p̂s)
-    # FIXME reuse common terms in exponential
-    exp((1 - σ) * Ê - logsumexp((Ĉ .* ϵs .+ p̂s) .* (1 - σ) .+ Ω̂s .+ log.(ϵs)))
+"""
+$(SIGNATURES)
+
+``Zᵢ ∝ exp(zᵢ)``, scaled to protect from under- and overflow, where
+``zᵢ = (Ĉ ϵᵢ + pᵢ) (1 - σ) + Ωᵢ``.
+"""
+function calculate_Zs(Ĉ, Ê, σ, Ω̂s, ϵs, p̂s)
+    zs = (Ĉ .* ϵs .+ p̂s) .* (1 - σ) .+ Ω̂s
+    exp.(zs .- maximum(zs))
 end
+
+calculate_∂Ê(Zs, ϵs) = sum(Zs) / sum(Zs .* ϵs)
+
+calculate_∂p̂s(Zs, ϵs) = Zs ./ (-sum(Zs .* ϵs))
+
+calculate_∂ϵs(∂p̂s, Ĉ) = Ĉ .* ∂p̂s
+
+calculate_∂Ω̂s(∂p̂s, σ) = ∂p̂s ./ (1 - σ)
 
 end # module
