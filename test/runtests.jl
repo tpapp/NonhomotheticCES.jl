@@ -1,6 +1,6 @@
 using NonhomotheticCES
-using NonhomotheticCES:
-    calculate_Ĉ, calculate_Zs, calculate_∂Ê, calculate_∂p̂s, calculate_∂ϵs,
+using NonhomotheticCES:         # internals
+    calculate_Ĉ, calculate_Zs_∑Zϵ, calculate_∂Ê, calculate_∂p̂s, calculate_∂ϵs,
     calculate_∂Ω̂s, calculate_∂σ
 
 using FiniteDifferences, LogExpFunctions, Test, StaticArrays, UnPack
@@ -42,11 +42,11 @@ end
         N = Val{2}()
         @unpack Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(N)
         Ĉ = calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = Ĉtol)
-        Zs = calculate_Zs(Ĉ, Ê, σ, Ω̂s, ϵs, p̂s)
-        ∂p̂s = calculate_∂p̂s(Zs, ϵs)
+        Zs, ∑Zϵ = calculate_Zs_∑Zϵ(Ĉ, Ê, σ, Ω̂s, ϵs, p̂s)
+        ∂p̂s = calculate_∂p̂s(Zs, ∑Zϵ)
         ∂ϵs = calculate_∂ϵs(∂p̂s, Ĉ)
         ∂Ω̂s = calculate_∂Ω̂s(∂p̂s, σ)
-        @test calculate_∂Ê(Zs, ϵs) ≈
+        @test calculate_∂Ê(Zs, ∑Zϵ) ≈
             ∂(h -> calculate_Ĉ(Ê + h, σ, Ω̂s, ϵs, p̂s; Ĉtol = Ĉtol)) atol = atol rtol = rtol
         for (j, ∂p̂) in pairs(∂p̂s)
             ∂p̂_fd = ∂(h -> calculate_Ĉ(Ê, σ, Ω̂s, ϵs, add_at(p̂s, j, h); Ĉtol = Ĉtol))
@@ -61,7 +61,7 @@ end
             ∂Ω̂_fd = ∂(h -> calculate_Ĉ(Ê, σ, add_at(Ω̂s, j, h), ϵs, p̂s; Ĉtol = Ĉtol))
             @test ∂Ω̂ ≈ ∂Ω̂_fd atol = atol rtol = rtol
         end
-        @test calculate_∂σ(Zs, Ĉ, Ê, σ, ϵs, p̂s) ≈
+        @test calculate_∂σ(Zs, ∑Zϵ, Ĉ, Ê, σ, ϵs, p̂s) ≈
             ∂(h -> calculate_Ĉ(Ê, σ + h, Ω̂s, ϵs, p̂s; Ĉtol = Ĉtol);
               max_range = σ * 0.99) atol = atol rtol = rtol
     end

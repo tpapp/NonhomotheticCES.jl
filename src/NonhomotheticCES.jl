@@ -74,22 +74,27 @@ end
 """
 $(SIGNATURES)
 
-``Zᵢ ∝ exp(zᵢ)``, scaled to protect from under- and overflow, where
-``zᵢ = (Ĉ ϵᵢ + pᵢ) (1 - σ) + Ωᵢ``.
+Calculate and return
+
+1. `Zs`, where each element is ``Zᵢ ∝ exp(zᵢ)``, scaled to protect from under- and overflow,
+where ``zᵢ = (Ĉ ϵᵢ + pᵢ) (1 - σ) + Ωᵢ``,
+
+2. `sum(Zs .* ϵs)`.
 """
-function calculate_Zs(Ĉ, Ê, σ, Ω̂s, ϵs, p̂s)
+function calculate_Zs_∑Zϵ(Ĉ, Ê, σ, Ω̂s, ϵs, p̂s)
     zs = (Ĉ .* ϵs .+ p̂s) .* (1 - σ) .+ Ω̂s
-    exp.(zs .- maximum(zs))
+    Zs = exp.(zs .- maximum(zs))
+    Zs, sum(Zs .* ϵs)
 end
 
-calculate_∂Ê(Zs, ϵs) = sum(Zs) / sum(Zs .* ϵs)
+calculate_∂Ê(Zs, ∑Zϵ) = sum(Zs) / ∑Zϵ
 
-calculate_∂p̂s(Zs, ϵs) = Zs ./ (-sum(Zs .* ϵs))
+calculate_∂p̂s(Zs, ∑Zϵ) = Zs ./ -∑Zϵ
 
 calculate_∂ϵs(∂p̂s, Ĉ) = Ĉ .* ∂p̂s
 
 calculate_∂Ω̂s(∂p̂s, σ) = ∂p̂s ./ (1 - σ)
 
-calculate_∂σ(Zs, Ĉ, Ê, σ, ϵs, p̂s) = (Ĉ + sum(Zs .* (p̂s .- Ê)) / sum(Zs .* ϵs)) / (1 - σ)
+calculate_∂σ(Zs, ∑Zϵ, Ĉ, Ê, σ, ϵs, p̂s) = (Ĉ + sum(Zs .* (p̂s .- Ê)) / ∑Zϵ) / (1 - σ)
 
 end # module
