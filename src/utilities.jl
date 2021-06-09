@@ -33,7 +33,10 @@ end
 $(SIGNATURES)
 
 Bisection method for finding and `x₁` near `x₀` such that `f(x₀) = 0` and
-`abs(x₁ - x₀) ≤ xtol`. Returns `x₁, f(x₁)`.
+`abs(x₁ - x₀) ≤ xtol` (except if it is numerically impossible to narrow the bracket further
+within the given float type).
+
+Returns `x₁, f(x₁)`.
 """
 function bisection(f, a::T, fa::T, b::T, fb::T, xtol, max_iterations) where {T}
     fa == 0 && return a, fa
@@ -42,7 +45,7 @@ function bisection(f, a::T, fa::T, b::T, fb::T, xtol, max_iterations) where {T}
     for _ in 1:max_iterations
         m = (a + b) / 2
         fm = f(m)
-        abs(a - b) ≤ xtol && return m, fm
+        (m == a || m == b || abs(a - b) ≤ xtol || fm == 0) && return m, fm
         if fm * fa > 0
             a, fa = m, fm
         else
