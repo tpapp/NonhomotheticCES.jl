@@ -3,7 +3,9 @@ using NonhomotheticCES:         # internals
     calculate_Ĉ, calculate_Zs_∑Zϵ, calculate_∂Ê, calculate_∂p̂s, calculate_∂ϵs,
     calculate_∂Ω̂s, calculate_∂σ
 
-using FiniteDifferences, LogExpFunctions, Test, StaticArrays, UnPack
+using FiniteDifferences, LogExpFunctions, Test, StaticArrays, UnPack, Random
+
+Random.seed!(0x3b1ac7d1ef4ad7c3eab4e377ca14b76c) # consistent test runs
 
 """
 Random parameters with `N` sectors. `L` is added to positive parameters, to bound away from
@@ -54,7 +56,7 @@ end
         end
         for (j, ∂ϵ) in pairs(∂ϵs)
             ∂ϵ_fd = ∂(h -> calculate_Ĉ(Ê, σ, Ω̂s, add_at(ϵs, j, h), p̂s; Ĉtol = Ĉtol);
-                      max_range = ϵs[j] * 0.99)
+                      max_range = ϵs[j] * 0.9)
             @test ∂ϵ ≈ ∂ϵ_fd atol = atol rtol = rtol
         end
         for (j, ∂Ω̂) in pairs(∂Ω̂s)
@@ -63,6 +65,6 @@ end
         end
         @test calculate_∂σ(Zs, ∑Zϵ, Ĉ, Ê, σ, ϵs, p̂s) ≈
             ∂(h -> calculate_Ĉ(Ê, σ + h, Ω̂s, ϵs, p̂s; Ĉtol = Ĉtol);
-              max_range = σ * 0.99) atol = atol rtol = rtol
+              max_range = σ * 0.9) atol = atol rtol = rtol
     end
 end
