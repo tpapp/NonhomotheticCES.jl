@@ -1,11 +1,9 @@
 using NonhomotheticCES
 using NonhomotheticCES:         # internals
-    calculate_Ĉ, calculate_Zs_∑Zϵ, calculate_∂Ê, calculate_∂p̂s, calculate_∂ϵs,
-    calculate_∂Ω̂s, calculate_∂σ
+    calculate_Ĉ, calculate_Zs_∑Zϵ, calculate_∂Ê, calculate_∂p̂s, calculate_∂σ
 
-using FiniteDifferences, LogExpFunctions, Test, StaticArrays, UnPack, Random
-import ForwardDiff
-import DiffResults
+using FiniteDifferences, LogExpFunctions, Test, StaticArrays, UnPack, Random, LinearAlgebra
+import ForwardDiff, DiffResults
 
 ####
 #### setup and utilities
@@ -37,18 +35,19 @@ function add_at(v::SVector, i::Int, x)
     SVector(m)
 end
 
+"Value and derivative using ForwardDiff."
 function fwd_d(f, x::Real)
     r = DiffResults.DiffResult(x, x)
     r = ForwardDiff.derivative!(r, f, x)
     DiffResults.value(r), DiffResults.derivative(r)
 end
 
-function fwd_g(f, x::AbstractVector)
+"Value and gradient using ForwardDiff."
+function fwd_∇(f, x::AbstractVector)
     r = DiffResults.DiffResult(x[1], x)
     r = ForwardDiff.gradient!(r, f, x)
     DiffResults.value(r), DiffResults.gradient(r)
 end
-
 
 ####
 #### internals
@@ -71,20 +70,18 @@ end
         @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(N)
         Zs, ∑Zϵ = calculate_Zs_∑Zϵ(Ĉ, Ê, σ, Ω̂s, ϵs, p̂s)
         ∂p̂s = calculate_∂p̂s(Zs, ∑Zϵ)
-        ∂ϵs = calculate_∂ϵs(∂p̂s, Ĉ)
-        ∂Ω̂s = calculate_∂Ω̂s(∂p̂s, σ)
         @test calculate_∂Ê(Zs, ∑Zϵ) ≈
             ∂(h -> calculate_Ĉ(Ê + h, σ, Ω̂s, ϵs, p̂s; Ĉtol = Ĉtol)) atol = atol rtol = rtol
         for (j, ∂p̂) in pairs(∂p̂s)
             ∂p̂_fd = ∂(h -> calculate_Ĉ(Ê, σ, Ω̂s, ϵs, add_at(p̂s, j, h); Ĉtol = Ĉtol))
             @test ∂p̂ ≈ ∂p̂_fd atol = atol rtol = rtol
         end
-        for (j, ∂ϵ) in pairs(∂ϵs)
+        for (j, ∂ϵ) in pairs(∂p̂s .* Ĉ)
             ∂ϵ_fd = ∂(h -> calculate_Ĉ(Ê, σ, Ω̂s, add_at(ϵs, j, h), p̂s; Ĉtol = Ĉtol);
                       max_range = ϵs[j] * 0.9)
             @test ∂ϵ ≈ ∂ϵ_fd atol = atol rtol = rtol
         end
-        for (j, ∂Ω̂) in pairs(∂Ω̂s)
+        for (j, ∂Ω̂) in pairs(∂p̂s ./ (1 - σ))
             ∂Ω̂_fd = ∂(h -> calculate_Ĉ(Ê, σ, add_at(Ω̂s, j, h), ϵs, p̂s; Ĉtol = Ĉtol))
             @test ∂Ω̂ ≈ ∂Ω̂_fd atol = atol rtol = rtol
         end
@@ -99,18 +96,33 @@ end
 ####
 
 @testset "argument checks" begin
-    @test_throws DomainError NHCES(-0.1, SVector(1.0, 2.0), SVector(1.0, 2.0))
-    @test_throws DomainError NHCES(1, SVector(1.0, 2.0), SVector(1.0, 2.0))
-    @test_throws DomainError NHCES(0.1, SVector(1.0, 2.0), SVector(-1.0, 2.0))
+    @test_throws DomainError NonhomotheticCESUtility(-0.1, SVector(1.0, 2.0), SVector(1.0, 2.0))
+    @test_throws DomainError NonhomotheticCESUtility(1, SVector(1.0, 2.0), SVector(1.0, 2.0))
+    @test_throws DomainError NonhomotheticCESUtility(0.1, SVector(1.0, 2.0), SVector(-1.0, 2.0))
 end
 
 @testset "API and AD checks" begin
-    @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(4))
+    @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(2))
     tol = 1e-10
-    pref = NHCES(σ, Ω̂s, ϵs)
+    pref = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
     @test log_consumption_aggregator(pref, Ê, p̂s; tol = tol) ≈ Ĉ atol = tol
-    f = h -> log_consumption_aggregator(NHCES(σ + 2 * h, Ω̂s, ϵs), Ê + h, p̂s)
-    v, d = fwd_d(f, 0.0)
-    @test v ≈ Ĉ atol = tol
-    @test d ≈ ∂(f) rtol = 1e-4
+    @testset "directional derivative" begin
+        f = h -> log_consumption_aggregator(NonhomotheticCESUtility(σ + 2h,
+                                                                    Ω̂s .+ SVector(3h, 4h),
+                                                                    ϵs .+ SVector(5h, 6h)),
+                                            Ê + 7h, p̂s .+ SVector(8h, 9h))
+        v, d = fwd_d(f, 0.0)
+        @test v ≈ Ĉ atol = tol
+        @test d ≈ ∂(f) rtol = 1e-4
+    end
+    @testset "gradient" begin
+        f = h -> log_consumption_aggregator(NonhomotheticCESUtility(σ + h[1],
+                                                                    Ω̂s .+ SVector(h[2], h[3]),
+                                                                    ϵs .+ SVector(h[4], h[5])),
+                                            Ê + h[6], p̂s .+ SVector(h[7], h[8]))
+        v, ∇ = fwd_∇(f, zeros(8))
+        @test v ≈ Ĉ atol = tol
+        ∇_fd = [∂(h -> (z = zeros(8); z[i] = h; f(z))) for i in 1:8]
+        @test norm(∇ .- ∇_fd, Inf) ≤ 1e-7
+    end
 end
