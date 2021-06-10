@@ -3,98 +3,82 @@ Placeholder for a short summary about NonhomotheticCES.
 """
 module NonhomotheticCES
 
+export NonhomotheticCESUtility, log_consumption_aggregator
+
 using ArgCheck: @argcheck
 using DocStringExtensions: SIGNATURES
+using ForwardDiff: Dual, value, partials
+using LinearAlgebra: dot
 using LogExpFunctions: logsumexp
+using StaticArrays: SVector
 using Statistics: mean
 using UnPack: @unpack
 
-"""
-$(SIGNATURES)
+include("utilities.jl")
+include("internals.jl")
 
-Find `a` and `b` so that `f(a) * f(b) ≤ 0`, bracketing a root. Return `a, f(a), b, f(b)`.
-
-`f` has to be increasing. At each iteration, `x` is adjusted by a stepsize in the
-appropriate direction. `Δ` is the initial value of the stepsize, and is increased by a
-factor of `G` after each step. At most `max_iterations` iterations are performed, after
-which the function errors.
-"""
-function bracket_increasing(f, x, Δ, G, max_iterations)
-    @argcheck Δ > 0 && G > 1
-    fx = f(x)
-    fx == 0 && return x, fx, f, fx
-    if fx > 0
-        Δ = -Δ
+struct NonhomotheticCESUtility{N,Tσ<:Real,TΩ̂<:Real,Tϵ<:Real}
+    σ::Tσ
+    Ω̂s::SVector{N,TΩ̂}
+    ϵs::SVector{N,Tϵ}
+    function NonhomotheticCESUtility(σ::Tσ, Ω̂s::SVector{N,TΩ̂},
+                   ϵs::SVector{N,Tϵ}) where {N,Tσ<:Real,TΩ̂<:Real,Tϵ<:Real}
+        check_σ_ϵs(σ, ϵs)
+        new{N,Tσ,TΩ̂,Tϵ}(σ, Ω̂s, ϵs)
     end
-    for _ in 1:max_iterations
-        x2 = x + Δ
-        fx2 = f(x2)
-        fx2 * fx ≤ 0 && return x, fx, x2, fx2
-        x, fx = x2, fx2
-        Δ *= G
-    end
-    error("too many iterations")
 end
 
 """
 $(SIGNATURES)
 
-Bisection method for finding and `x₁` near `x₀` such that `f(x₀) = 0` and
-`abs(x₁ - x₀) ≤ xtol`. Returns `x₁, f(x₁)`.
-"""
-function bisection(f, a::T, fa::T, b::T, fb::T, xtol, max_iterations) where {T}
-    fa == 0 && return a, fa
-    fb == 0 && return b, fb
-    fa * fb < 0 || error("not bracketed")
-    for _ in 1:max_iterations
-        m = (a + b) / 2
-        fm = f(m)
-        abs(a - b) ≤ xtol && return m, fm
-        if fm * fa > 0
-            a, fa = m, fm
-        else
-            b, fb = m, fm
-        end
-    end
-    error("too many iterations")
-end
+Non-homothetic CES preferences, as defined in
 
-function calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = 0x1p-10, skipcheck::Bool = false)
-    if !skipcheck
-        @argcheck σ > 0 && σ ≠ 1 && all(ϵs .> 0)
-    end
-    f(Ĉ) = logsumexp((Ĉ .* ϵs .+ p̂s) .* (1 - σ) .+ Ω̂s) / (1 - σ) - Ê
-    Ĉ0 = (Ê - mean(Ω̂s) / (1 - σ) - mean(p̂s)) / mean(ϵs)
-    Ĉ1, fĈ1, Ĉ2, fĈ2 = bracket_increasing(f, Ĉ0, 1.0, 2.0, 50)
-    Ĉ, r = bisection(f, Ĉ1, fĈ1, Ĉ2, fĈ2, Ĉtol, 50)
-    # FIXME check residual r?
-    Ĉ
+*Comin, D., Lashkari, D., & Mestieri, Martí (2021). Structural change with long-run
+ income and price effects. Econometrica, 89(1), 311–374.*
+
+Arguments:
+
+- `σ`: elasticity of substitution between goods of different sectors, `> 0`, `≠ 1`.
+- `Ω̂s`: **log** of sector weights
+- `ϵs`: sectoral non-homotheticity parameters.
+
+Use `SVector`s for vector arguments whenever possible.
+"""
+function NonhomotheticCESUtility(σ::Real, Ω̂s::AbstractVector, ϵs::AbstractVector)
+    N = length(Ω̂s)
+    @argcheck N == length(ϵs)
+    NonhomotheticCESUtility(σ, SVector{N}(Ω̂s), SVector{N}(ϵs))
 end
+# FIXME: SizedVector constructors
+
+partials_product(x, y, α = 1) = mapreduce((x, y) -> partials(x) * y * α, +, x, y)
 
 """
 $(SIGNATURES)
 
-Calculate and return
-
-1. `Zs`, where each element is ``Zᵢ ∝ exp(zᵢ)``, scaled to protect from under- and overflow,
-where ``zᵢ = (Ĉ ϵᵢ + pᵢ) (1 - σ) + Ωᵢ``,
-
-2. `sum(Zs .* ϵs)`.
+Calculate the **log** consumption aggregator for the given utility, with **log** expenditure
+`Ê`, and **log** sector prices `p̂s`, within (absolute) tolerance `tol`.
 """
-function calculate_Zs_∑Zϵ(Ĉ, Ê, σ, Ω̂s, ϵs, p̂s)
-    zs = (Ĉ .* ϵs .+ p̂s) .* (1 - σ) .+ Ω̂s
-    Zs = exp.(zs .- maximum(zs))
-    Zs, sum(Zs .* ϵs)
+function log_consumption_aggregator(nhces::NonhomotheticCESUtility{N,Tσ,TΩ̂,Tϵ}, Ê::TÊ,
+                                    p̂s::SVector{N,Tp̂};
+                                    tol = 1e-20) where {N,Tσ,TΩ̂,Tϵ,TÊ,Tp̂}
+    @unpack σ, Ω̂s, ϵs = nhces
+    T = promote_type(Tσ,TΩ̂,Tϵ,TÊ,Tp̂)
+    if T <: Dual
+        vÊ, vσ, vΩ̂s, vϵs, vp̂s = value(Ê), value(σ), value.(Ω̂s), value.(ϵs), value.(p̂s)
+        Ĉ = calculate_Ĉ(vÊ, vσ, vΩ̂s, vϵs, vp̂s; Ĉtol = tol, skipcheck = true)
+        Zs, ∑Zϵ = calculate_Zs_∑Zϵ(Ĉ, vÊ, vσ, vΩ̂s, vϵs, vp̂s)
+        # NOTE: we could be clever here and only calculate what is actually needed
+        ∂p̂s = calculate_∂p̂s(Zs, ∑Zϵ)
+        dĈ = (partials(Ê) * calculate_∂Ê(Zs, ∑Zϵ) +                      # ∂Ê
+              partials(σ) * calculate_∂σ(Zs, ∑Zϵ, Ĉ, vÊ, vσ, vϵs, vp̂s) + # ∂σ
+              partials_product(Ω̂s, ∂p̂s, inv(1 - vσ)) +                   # ∂Ω̂
+              partials_product(ϵs, ∂p̂s, Ĉ) +                             # ∂ϵs
+              partials_product(p̂s, ∂p̂s))                                 # ∂p̂s
+        T(Ĉ, dĈ)
+    else
+        calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = tol, skipcheck = true)
+    end
 end
-
-calculate_∂Ê(Zs, ∑Zϵ) = sum(Zs) / ∑Zϵ
-
-calculate_∂p̂s(Zs, ∑Zϵ) = Zs ./ -∑Zϵ
-
-calculate_∂ϵs(∂p̂s, Ĉ) = Ĉ .* ∂p̂s
-
-calculate_∂Ω̂s(∂p̂s, σ) = ∂p̂s ./ (1 - σ)
-
-calculate_∂σ(Zs, ∑Zϵ, Ĉ, Ê, σ, ϵs, p̂s) = (Ĉ + sum(Zs .* (p̂s .- Ê)) / ∑Zϵ) / (1 - σ)
 
 end # module
