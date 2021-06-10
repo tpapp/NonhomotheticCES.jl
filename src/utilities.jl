@@ -11,11 +11,13 @@ Find `a` and `b` so that `f(a) * f(b) ≤ 0`, bracketing a root. Return `a, f(a)
 appropriate direction. `Δ` is the initial value of the stepsize, and is increased by a
 factor of `G` after each step. At most `max_iterations` iterations are performed, after
 which the function errors.
+
+For the corner case of the initial `f(x) == 0`, `x, fx, x, fx` is returned.
 """
 function bracket_increasing(f, x, Δ, G, max_iterations)
     @argcheck Δ > 0 && G > 1
     fx = f(x)
-    fx == 0 && return x, fx, f, fx
+    fx == 0 && return x, fx, x, fx
     if fx > 0
         Δ = -Δ
     end

@@ -36,9 +36,8 @@ function add_at(v::SVector, i::Int, x)
 end
 
 "Value and derivative using ForwardDiff."
-function fwd_d(f, x::Real)
-    r = DiffResults.DiffResult(x, x)
-    r = ForwardDiff.derivative!(r, f, x)
+function fwd_d(f::F, x::Real) where F
+    r = ForwardDiff.derivative!(DiffResults.DiffResult(x, x), f, x)
     DiffResults.value(r), DiffResults.derivative(r)
 end
 
@@ -57,7 +56,7 @@ end
     tol = 1e-10
     for _ in 1:100
         @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(4))
-        @test calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = tol) ≈ Ĉ atol = tol
+        @test @inferred(calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = tol)) ≈ Ĉ atol = tol
     end
 end
 
@@ -68,9 +67,9 @@ end
     for _ in 1:100
         N = Val{2}()
         @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(N)
-        Zs, ∑Zϵ = calculate_Zs_∑Zϵ(Ĉ, Ê, σ, Ω̂s, ϵs, p̂s)
-        ∂p̂s = calculate_∂p̂s(Zs, ∑Zϵ)
-        @test calculate_∂Ê(Zs, ∑Zϵ) ≈
+        Zs, ∑Zϵ = @inferred calculate_Zs_∑Zϵ(Ĉ, Ê, σ, Ω̂s, ϵs, p̂s)
+        ∂p̂s = @inferred calculate_∂p̂s(Zs, ∑Zϵ)
+        @test @inferred(calculate_∂Ê(Zs, ∑Zϵ)) ≈
             ∂(h -> calculate_Ĉ(Ê + h, σ, Ω̂s, ϵs, p̂s; Ĉtol = Ĉtol)) atol = atol rtol = rtol
         for (j, ∂p̂) in pairs(∂p̂s)
             ∂p̂_fd = ∂(h -> calculate_Ĉ(Ê, σ, Ω̂s, ϵs, add_at(p̂s, j, h); Ĉtol = Ĉtol))
@@ -106,13 +105,13 @@ end
     max_range = min(σ, minimum(ϵs) / 5) * 0.9
     tol = 1e-10
     pref = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
-    @test log_consumption_aggregator(pref, Ê, p̂s; tol = tol) ≈ Ĉ atol = tol
+    @test @inferred(log_consumption_aggregator(pref, Ê, p̂s; tol = tol)) ≈ Ĉ atol = tol
     @testset "directional derivative" begin
         f = h -> log_consumption_aggregator(NonhomotheticCESUtility(σ + h,
                                                                     Ω̂s .+ SVector(2h, 3h),
                                                                     ϵs .+ SVector(4h, 5h)),
                                             Ê + 7h, p̂s .+ SVector(8h, 9h))
-        v, d = fwd_d(f, 0.0)
+        v, d = @inferred fwd_d(f, 0.0)
         @test v ≈ Ĉ atol = tol
         @test d ≈ ∂(f; max_range) rtol = 1e-4
     end
@@ -121,7 +120,7 @@ end
                                                                     Ω̂s .+ SVector(h[2], h[3]),
                                                                     ϵs .+ SVector(h[4], h[5])),
                                             Ê + h[6], p̂s .+ SVector(h[7], h[8]))
-        v, ∇ = fwd_∇(f, zeros(8))
+        v, ∇ = @inferred fwd_∇(f, zeros(8))
         @test v ≈ Ĉ atol = tol
         ∇_fd = [∂(h -> (z = zeros(8); z[i] = h; f(z)); max_range) for i in 1:8]
         @test norm(∇ .- ∇_fd, Inf) ≤ 1e-7
