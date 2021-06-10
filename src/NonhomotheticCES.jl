@@ -7,9 +7,9 @@ export NonhomotheticCESUtility, log_consumption_aggregator, log_sectoral_consump
 
 using ArgCheck: @argcheck
 using DocStringExtensions: SIGNATURES
-using ForwardDiff: Dual, value, partials
 using LinearAlgebra: dot
 using LogExpFunctions: logsumexp
+using Requires: @require
 using StaticArrays: SVector
 using Statistics: mean
 using UnPack: @unpack
@@ -56,8 +56,6 @@ function NonhomotheticCESUtility(σ::Real, Ω̂s::AbstractVector, ϵs::AbstractV
 end
 # FIXME: SizedVector constructors
 
-partials_product(x, y, α = 1) = mapreduce((x, y) -> partials(x) * y * α, +, x, y)
-
 """
 $(SIGNATURES)
 
@@ -68,21 +66,31 @@ function log_consumption_aggregator(NHCES::NonhomotheticCESUtility{N,Tσ,TΩ̂,T
                                     p̂s::SVector{N,Tp̂};
                                     tol = 1e-20) where {N,Tσ,TΩ̂,Tϵ,TÊ,Tp̂}
     @unpack σ, Ω̂s, ϵs = NHCES
-    T = promote_type(Tσ,TΩ̂,Tϵ,TÊ,Tp̂)
-    if T <: Dual
-        vÊ, vσ, vΩ̂s, vϵs, vp̂s = value(Ê), value(σ), value.(Ω̂s), value.(ϵs), value.(p̂s)
-        Ĉ = calculate_Ĉ(vÊ, vσ, vΩ̂s, vϵs, vp̂s; Ĉtol = tol, skipcheck = true)
-        Zs, ∑Zϵ = calculate_Zs_∑Zϵ(Ĉ, vÊ, vσ, vΩ̂s, vϵs, vp̂s)
-        # NOTE: we could be clever here and only calculate what is actually needed
-        ∂p̂s = calculate_∂p̂s(Zs, ∑Zϵ)
-        dĈ = (partials(Ê) * calculate_∂Ê(Zs, ∑Zϵ) +                      # ∂Ê
-              partials(σ) * calculate_∂σ(Zs, ∑Zϵ, Ĉ, vÊ, vσ, vϵs, vp̂s) + # ∂σ
-              partials_product(Ω̂s, ∂p̂s, inv(1 - vσ)) +                   # ∂Ω̂
-              partials_product(ϵs, ∂p̂s, Ĉ) +                             # ∂ϵs
-              partials_product(p̂s, ∂p̂s))                                 # ∂p̂s
-        T(Ĉ, dĈ)
-    else
-        calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = tol, skipcheck = true)
+    calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = tol, skipcheck = true)
+end
+
+function __init__()
+    @require ForwardDiff="f6369f11-7733-5829-9624-2563aa707210" begin
+        using ForwardDiff: Dual, value, partials, valtype
+        import NonhomotheticCES: calculate_Ĉ
+
+        partials_product(x, y, α = 1) = mapreduce((x, y) -> partials(x) * y * α, +, x, y)
+
+        function calculate_Ĉ(::Type{T}, Ê, σ, Ω̂s, ϵs, p̂s;
+                             Ĉtol = DEFAULT_CTOL, skipcheck = true) where {T<:Dual}
+            vÊ, vσ, vΩ̂s, vϵs, vp̂s = value(Ê), value(σ), value.(Ω̂s), value.(ϵs), value.(p̂s)
+            Ĉ = calculate_Ĉ(valtype(T), vÊ, vσ, vΩ̂s, vϵs, vp̂s;
+                            Ĉtol = Ĉtol, skipcheck = skipcheck)
+            Zs, ∑Zϵ = calculate_Zs_∑Zϵ(Ĉ, vÊ, vσ, vΩ̂s, vϵs, vp̂s)
+            # NOTE: we could be clever here and only calculate what is actually needed
+            ∂p̂s = calculate_∂p̂s(Zs, ∑Zϵ)
+            dĈ = (partials(Ê) * calculate_∂Ê(Zs, ∑Zϵ) +                      # ∂Ê
+                  partials(σ) * calculate_∂σ(Zs, ∑Zϵ, Ĉ, vÊ, vσ, vϵs, vp̂s) + # ∂σ
+                  partials_product(Ω̂s, ∂p̂s, inv(1 - vσ)) +                   # ∂Ω̂
+                  partials_product(ϵs, ∂p̂s, Ĉ) +                             # ∂ϵs
+                  partials_product(p̂s, ∂p̂s))                                 # ∂p̂s
+            T(Ĉ, dĈ)
+        end
     end
 end
 
