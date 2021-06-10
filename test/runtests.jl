@@ -103,17 +103,18 @@ end
 
 @testset "API and AD checks" begin
     @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(2))
+    max_range = min(σ, minimum(ϵs) / 5) * 0.9
     tol = 1e-10
     pref = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
     @test log_consumption_aggregator(pref, Ê, p̂s; tol = tol) ≈ Ĉ atol = tol
     @testset "directional derivative" begin
-        f = h -> log_consumption_aggregator(NonhomotheticCESUtility(σ + 2h,
-                                                                    Ω̂s .+ SVector(3h, 4h),
-                                                                    ϵs .+ SVector(5h, 6h)),
+        f = h -> log_consumption_aggregator(NonhomotheticCESUtility(σ + h,
+                                                                    Ω̂s .+ SVector(2h, 3h),
+                                                                    ϵs .+ SVector(4h, 5h)),
                                             Ê + 7h, p̂s .+ SVector(8h, 9h))
         v, d = fwd_d(f, 0.0)
         @test v ≈ Ĉ atol = tol
-        @test d ≈ ∂(f) rtol = 1e-4
+        @test d ≈ ∂(f; max_range) rtol = 1e-4
     end
     @testset "gradient" begin
         f = h -> log_consumption_aggregator(NonhomotheticCESUtility(σ + h[1],
@@ -122,7 +123,7 @@ end
                                             Ê + h[6], p̂s .+ SVector(h[7], h[8]))
         v, ∇ = fwd_∇(f, zeros(8))
         @test v ≈ Ĉ atol = tol
-        ∇_fd = [∂(h -> (z = zeros(8); z[i] = h; f(z))) for i in 1:8]
+        ∇_fd = [∂(h -> (z = zeros(8); z[i] = h; f(z)); max_range) for i in 1:8]
         @test norm(∇ .- ∇_fd, Inf) ≤ 1e-7
     end
 end
