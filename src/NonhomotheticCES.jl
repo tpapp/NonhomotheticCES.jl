@@ -77,7 +77,7 @@ function __init__()
         partials_product(x, y, α = 1) = mapreduce((x, y) -> partials(x) * y * α, +, x, y)
 
         function calculate_Ĉ(::Type{T}, Ê, σ, Ω̂s, ϵs, p̂s;
-                             Ĉtol = DEFAULT_CTOL, skipcheck = true) where {T<:Dual}
+                             Ĉtol = DEFAULT_CTOL, skipcheck = false) where {T<:Dual}
             vÊ, vσ, vΩ̂s, vϵs, vp̂s = value(Ê), value(σ), value.(Ω̂s), value.(ϵs), value.(p̂s)
             Ĉ = calculate_Ĉ(valtype(T), vÊ, vσ, vΩ̂s, vϵs, vp̂s;
                             Ĉtol = Ĉtol, skipcheck = skipcheck)
