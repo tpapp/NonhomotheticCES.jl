@@ -125,4 +125,6 @@ end
         ∇_fd = [∂(h -> (z = zeros(8); z[i] = h; f(z)); max_range) for i in 1:8]
         @test norm(∇ .- ∇_fd, Inf) ≤ 1e-7
     end
+    @test @inferred(log_sectoral_consumptions(pref, Ê, p̂s, Ĉ)) ≈
+        @. Ω̂s - σ * (p̂s - Ê) + (1 - σ) * ϵs * Ĉ
 end
