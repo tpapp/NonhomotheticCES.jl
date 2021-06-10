@@ -8,4 +8,25 @@ A small package to solve for the consumption aggregator for non-homothetic CES p
 
 *Comin, D., Lashkari, D., & Mestieri, Martí (2021). Structural change with long-run income and price effects. Econometrica, 89(1), 311–374.*
 
-**NOTE: WORK IN PROGRESS**
+## API
+
+```julia
+using NonhomotheticCES, StaticArrays
+
+NHCES = NonhomotheticCESUtility(σ,  # σ
+                                Ω̂s, # LOG sectoral Ωs
+                                ϵs) # sectoral ϵs
+
+Ĉ = log_consumption_aggregator(NHCES,
+                               Ê,  # LOG expenditure
+                               p̂s) # LOG prices
+
+ĉs = log_sectoral_consumptions(NHCES, Ê, p̂s, Ĉ)
+```
+
+## Integrations
+
+Partial derivatives are implemented for AD frameworks:
+
+1. [X] [ForwardDiff.jl](https://github.com/JuliaDiff/ForwardDiff.jl)
+2. [ ] [ChainRulesCore.jl](https://github.com/JuliaDiff/ChainRulesCore.jl) **WIP**
