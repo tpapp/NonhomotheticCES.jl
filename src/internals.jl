@@ -19,11 +19,19 @@ function check_σ_ϵs(σ, ϵs)
 end
 
 """
+Default tolerance for calculating `Ĉ`.
+"""
+const DEFAULT_CTOL = 1e-8
+
+"""
 $(SIGNATURES)
 
-Calculate `Ĉ` from parameters.
+Calculate `Ĉ` from parameters. `T` is for a separate, conditional dispatch path to catch
+`ForwardDiff.Dual`.
 """
-function calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = 0x1p-10, skipcheck::Bool = false)
+function calculate_Ĉ(::Type{T}, Ê, σ, Ω̂s, ϵs, p̂s;
+                     Ĉtol = DEFAULT_CTOL,
+                     skipcheck::Bool = false) where {T <: Real}
     skipcheck || check_σ_ϵs(σ, ϵs)
     f(Ĉ) = logsumexp((Ĉ .* ϵs .+ p̂s) .* (1 - σ) .+ Ω̂s) / (1 - σ) - Ê
     Ĉ0 = (Ê - mean(Ω̂s) / (1 - σ) - mean(p̂s)) / mean(ϵs)
@@ -32,6 +40,15 @@ function calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = 0x1p-10, skipcheck::B
     # FIXME check residual r?
     Ĉ
 end
+
+function calculate_Ĉ(Ê::TÊ, σ::Tσ, Ω̂s::AbstractVector{TΩ̂}, ϵs::AbstractVector{Tϵ},
+                     p̂s::AbstractVector{Tp̂};
+                     Ĉtol = DEFAULT_CTOL,
+                     skipcheck::Bool = false) where {Tσ,TΩ̂,Tϵ,TÊ,Tp̂}
+    T = promote_type(Tσ,TΩ̂,Tϵ,TÊ,Tp̂)
+    calculate_Ĉ(T, Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol, skipcheck)
+end
+
 
 ###
 ### partial derivatives
