@@ -33,6 +33,6 @@ Partial derivatives are implemented for AD frameworks:
 
 ## Example
 
-σ = 0.5, Ω̂₁ = 0.0, Ω̂₂ = 0.0, ϵ₁ = 1.0, ϵ₂ = 2.0, p̂₁ = 0.1, p̂₂ = 0.0 (see <scripts/plot.jl>).
+σ = 0.5, Ω̂₁ = 0.0, Ω̂₂ = 0.0, ϵ₁ = 1.0, ϵ₂ = 2.0, p̂₁ = 0.1, p̂₂ = 0.0 (see <script/plot.jl>).
 
-<img src="scripts/example.png" width="50%">
+<img src="script/example.png" width="50%">
