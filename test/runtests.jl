@@ -110,7 +110,7 @@ end
         f = h -> log_consumption_aggregator(NonhomotheticCESUtility(σ + h,
                                                                     Ω̂s .+ SVector(2h, 3h),
                                                                     ϵs .+ SVector(4h, 5h)),
-                                            Ê + 7h, p̂s .+ SVector(8h, 9h))
+                                            p̂s .+ SVector(8h, 9h), Ê + 7h)
         v, d = @inferred fwd_d(f, 0.0)
         @test v ≈ Ĉ atol = tol
         @test d ≈ ∂(f; max_range) rtol = 1e-4
@@ -128,4 +128,7 @@ end
     end
     @test @inferred(log_sectoral_consumptions(pref, p̂s, Ê, Ĉ)) ≈
         @. Ω̂s - σ * (p̂s - Ê) + (1 - σ) * ϵs * Ĉ
+    @testset "non-finite inputs" begin
+        @test_throws DomainError log_consumption_aggregator(pref, p̂s, -Inf)
+    end
 end

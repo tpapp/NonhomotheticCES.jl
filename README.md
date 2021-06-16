@@ -30,3 +30,9 @@ Partial derivatives are implemented for AD frameworks:
 
 1. [X] [ForwardDiff.jl](https://github.com/JuliaDiff/ForwardDiff.jl)
 2. [ ] [ChainRulesCore.jl](https://github.com/JuliaDiff/ChainRulesCore.jl) **WIP**
+
+## Example
+
+σ = 0.5, Ω̂₁ = 0.0, Ω̂₂ = 0.0, ϵ₁ = 1.0, ϵ₂ = 2.0, p̂₁ = 0.1, p̂₂ = 0.0 (see <scripts/plot.jl>).
+
+<img src="scripts/example.png" width="50%">

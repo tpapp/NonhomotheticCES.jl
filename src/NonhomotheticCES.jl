@@ -66,6 +66,7 @@ function log_consumption_aggregator(NHCES::NonhomotheticCESUtility{N,Tσ,TΩ̂,T
                                     p̂s::SVector{N,Tp̂}, Ê::TÊ;
                                     tol = 1e-20) where {N,Tσ,TΩ̂,Tϵ,TÊ,Tp̂}
     @unpack σ, Ω̂s, ϵs = NHCES
+    @argcheck isfinite(Ê) && all(isfinite, p̂s) DomainError
     calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = tol, skipcheck = true)
 end
 

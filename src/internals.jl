@@ -26,6 +26,15 @@ const DEFAULT_CTOL = 1e-8
 """
 $(SIGNATURES)
 
+An initial guess for `Ĉ`, to start the bracketing.
+"""
+function guess_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s)
+    (Ê - mean(Ω̂s) / (1 - σ) - mean(p̂s)) / mean(ϵs)
+end
+
+"""
+$(SIGNATURES)
+
 Calculate `Ĉ` from parameters. `T` is for a separate, conditional dispatch path to catch
 `ForwardDiff.Dual`.
 """
@@ -34,7 +43,8 @@ function calculate_Ĉ(::Type{T}, Ê, σ, Ω̂s, ϵs, p̂s;
                      skipcheck::Bool = false) where {T <: Real}
     skipcheck || check_σ_ϵs(σ, ϵs)
     f(Ĉ) = logsumexp((Ĉ .* ϵs .+ p̂s) .* (1 - σ) .+ Ω̂s) / (1 - σ) - Ê
-    Ĉ0 = (Ê - mean(Ω̂s) / (1 - σ) - mean(p̂s)) / mean(ϵs)
+    Ĉ0 = guess_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s)
+    @argcheck isfinite(Ĉ0) "infinite initial guess"
     Ĉ1, fĈ1, Ĉ2, fĈ2 = bracket_increasing(f, Ĉ0, 1.0, 2.0, 100)
     Ĉ, r = bisection(f, Ĉ1, fĈ1, Ĉ2, fĈ2, Ĉtol, 100)
     # FIXME check residual r?
