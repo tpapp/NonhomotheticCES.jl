@@ -71,7 +71,7 @@ end
 
 function __init__()
     @require ForwardDiff="f6369f11-7733-5829-9624-2563aa707210" begin
-        using ForwardDiff: Dual, value, partials, valtype
+        using .ForwardDiff: Dual, value, partials, valtype
         import NonhomotheticCES: calculate_Ĉ
 
         partials_product(x, y, α = 1) = mapreduce((x, y) -> partials(x) * y * α, +, x, y)
