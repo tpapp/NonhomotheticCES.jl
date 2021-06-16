@@ -59,11 +59,11 @@ end
 """
 $(SIGNATURES)
 
-Calculate the **log** consumption aggregator for the given utility, with **log** expenditure
-`Ê`, and **log** sector prices `p̂s`, within (absolute) tolerance `tol`.
+Calculate the **log** consumption aggregator for the given utility, with **log** sector
+prices `p̂s` and **log** expenditure `Ê`; within (absolute) tolerance `tol`.
 """
-function log_consumption_aggregator(NHCES::NonhomotheticCESUtility{N,Tσ,TΩ̂,Tϵ}, Ê::TÊ,
-                                    p̂s::SVector{N,Tp̂};
+function log_consumption_aggregator(NHCES::NonhomotheticCESUtility{N,Tσ,TΩ̂,Tϵ},
+                                    p̂s::SVector{N,Tp̂}, Ê::TÊ;
                                     tol = 1e-20) where {N,Tσ,TΩ̂,Tϵ,TÊ,Tp̂}
     @unpack σ, Ω̂s, ϵs = NHCES
     calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = tol, skipcheck = true)
@@ -100,7 +100,7 @@ $(SIGNATURES)
 Calculate **log** sectoral consumptions, return as a vector. Arguments are in logs; see
 [`log_consumption_aggregator`](@ref) which whould also be used to obtain `Ĉ`.
 """
-function log_sectoral_consumptions(NHCES::NonhomotheticCESUtility, Ê, p̂s, Ĉ)
+function log_sectoral_consumptions(NHCES::NonhomotheticCESUtility, p̂s, Ê, Ĉ)
     @unpack σ, Ω̂s, ϵs = NHCES
     Ω̂s .- σ .* (p̂s .- Ê) + ((1 - σ) * Ĉ) .* ϵs
 end

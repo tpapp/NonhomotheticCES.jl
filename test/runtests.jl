@@ -105,7 +105,7 @@ end
     max_range = min(σ, minimum(ϵs) / 5) * 0.9
     tol = 1e-10
     pref = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
-    @test @inferred(log_consumption_aggregator(pref, Ê, p̂s; tol = tol)) ≈ Ĉ atol = tol
+    @test @inferred(log_consumption_aggregator(pref, p̂s, Ê; tol = tol)) ≈ Ĉ atol = tol
     @testset "directional derivative" begin
         f = h -> log_consumption_aggregator(NonhomotheticCESUtility(σ + h,
                                                                     Ω̂s .+ SVector(2h, 3h),
@@ -119,12 +119,13 @@ end
         f = h -> log_consumption_aggregator(NonhomotheticCESUtility(σ + h[1],
                                                                     Ω̂s .+ SVector(h[2], h[3]),
                                                                     ϵs .+ SVector(h[4], h[5])),
-                                            Ê + h[6], p̂s .+ SVector(h[7], h[8]))
+                                            p̂s .+ SVector(h[7], h[8]),
+                                            Ê + h[6])
         v, ∇ = @inferred fwd_∇(f, zeros(8))
         @test v ≈ Ĉ atol = tol
         ∇_fd = [∂(h -> (z = zeros(8); z[i] = h; f(z)); max_range) for i in 1:8]
         @test norm(∇ .- ∇_fd, Inf) ≤ 1e-7
     end
-    @test @inferred(log_sectoral_consumptions(pref, Ê, p̂s, Ĉ)) ≈
+    @test @inferred(log_sectoral_consumptions(pref, p̂s, Ê, Ĉ)) ≈
         @. Ω̂s - σ * (p̂s - Ê) + (1 - σ) * ϵs * Ĉ
 end
