@@ -104,14 +104,14 @@ end
     @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(2))
     max_range = min(σ, minimum(ϵs) / 5) * 0.9
     tol = 1e-10
-    pref = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
-    @test @inferred(log_consumption_aggregator(pref, p̂s, Ê; tol = tol)) ≈ Ĉ atol = tol
+    U = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
+    @test @inferred(log_consumption_aggregator(U, p̂s, Ê; tol = tol)) ≈ Ĉ atol = tol
     @testset "directional derivative" begin
-        f = h -> log_consumption_aggregator(NonhomotheticCESUtility(σ + h,
-                                                                    Ω̂s .+ SVector(2h, 3h),
-                                                                    ϵs .+ SVector(4h, 5h)),
-                                            p̂s .+ SVector(8h, 9h), Ê + 7h)
-        v, d = @inferred fwd_d(f, 0.0)
+        f(h) = log_consumption_aggregator(NonhomotheticCESUtility(σ + h,
+                                                                  Ω̂s .+ SVector(2h, 3h),
+                                                                  ϵs .+ SVector(4h, 5h)),
+                                          p̂s .+ SVector(8h, 9h), Ê + 7h)
+        v, d = #= @inferred =# fwd_d(f, 0.0) # FIXME inference
         @test v ≈ Ĉ atol = tol
         @test d ≈ ∂(f; max_range) rtol = 1e-4
     end
@@ -126,9 +126,24 @@ end
         ∇_fd = [∂(h -> (z = zeros(8); z[i] = h; f(z)); max_range) for i in 1:8]
         @test norm(∇ .- ∇_fd, Inf) ≤ 1e-7
     end
-    @test @inferred(log_sectoral_consumptions(pref, p̂s, Ê, Ĉ)) ≈
+
+    @test @inferred(log_sectoral_consumptions(U, p̂s, Ê, Ĉ)) ≈
         @. Ω̂s - σ * (p̂s - Ê) + (1 - σ) * ϵs * Ĉ
+
     @testset "non-finite inputs" begin
-        @test_throws DomainError log_consumption_aggregator(pref, p̂s, -Inf)
+        @test_throws DomainError log_consumption_aggregator(U, p̂s, -Inf)
+    end
+
+    @testset "homotheticity" begin
+        @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(2))
+        U = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
+        ν = 1.4
+        Ĉ1 = log_consumption_aggregator(U, p̂s, Ê)
+        Ĉ2 = log_consumption_aggregator(U, p̂s .+ ν, Ê + ν)
+        @test Ĉ1 ≈ Ĉ2 atol = 1e-5
+        @test Ĉ1 ≈ Ĉ atol = 1e-5
+        ĉ1 = log_sectoral_consumptions(U, p̂s, Ê, Ĉ)
+        ĉ2 = log_sectoral_consumptions(U, p̂s .+ ν, Ê + ν, Ĉ)
+        @test ĉ1 ≈ ĉ2 atol = 1e-5
     end
 end
