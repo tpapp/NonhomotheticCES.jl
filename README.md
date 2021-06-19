@@ -13,15 +13,15 @@ A small package to solve for the consumption aggregator for non-homothetic CES p
 ```julia
 using NonhomotheticCES, StaticArrays
 
-NHCES = NonhomotheticCESUtility(σ,  # σ
-                                Ω̂s, # LOG sectoral Ωs
-                                ϵs) # sectoral ϵs
+U = NonhomotheticCESUtility(σ,  # σ
+                            Ω̂s, # LOG sectoral Ωs
+                            ϵs) # sectoral ϵs
 
-Ĉ = log_consumption_aggregator(NHCES,
+Ĉ = log_consumption_aggregator(U,
                                Ê,  # LOG expenditure
                                p̂s) # LOG prices
 
-ĉs = log_sectoral_consumptions(NHCES, Ê, p̂s, Ĉ)
+ĉs = log_sectoral_consumptions(U, Ê, p̂s, Ĉ)
 ```
 
 ## Integrations

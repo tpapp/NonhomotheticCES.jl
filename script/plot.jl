@@ -6,12 +6,12 @@
 
 using NonhomotheticCES, PGFPlotsX, StaticArrays
 
-pref = NonhomotheticCESUtility(0.5, SVector(0.0, 0.0), SVector(1.0, 2.0))
+U = NonhomotheticCESUtility(0.5, SVector(0.0, 0.0), SVector(1.0, 2.0))
 
 E = range(0.001, 0.5; length = 100)
 p̂ = SVector(0.1, 0.0)
-Ĉ = [log_consumption_aggregator(pref, p̂, log(E)) for E in E]
-ĉs = [log_sectoral_consumptions(pref, p̂, log(E), Ĉ) for (E, Ĉ) in zip(E, Ĉ)]
+Ĉ = [log_consumption_aggregator(U, p̂, log(E)) for E in E]
+ĉs = [log_sectoral_consumptions(U, p̂, log(E), Ĉ) for (E, Ĉ) in zip(E, Ĉ)]
 
 pgfsave(joinpath(@__DIR__, "example.png"),
         @pgf Axis({ xlabel = "expenditure", legend_pos = "north west",
