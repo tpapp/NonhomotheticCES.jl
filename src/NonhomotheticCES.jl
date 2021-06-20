@@ -62,10 +62,10 @@ $(SIGNATURES)
 Calculate the **log** consumption aggregator for the given utility, with **log** sector
 prices `p̂s` and **log** expenditure `Ê`; within (absolute) tolerance `tol`.
 """
-function log_consumption_aggregator(NHCES::NonhomotheticCESUtility{N,Tσ,TΩ̂,Tϵ},
+function log_consumption_aggregator(U::NonhomotheticCESUtility{N,Tσ,TΩ̂,Tϵ},
                                     p̂s::SVector{N,Tp̂}, Ê::TÊ;
                                     tol = 1e-20) where {N,Tσ,TΩ̂,Tϵ,TÊ,Tp̂}
-    @unpack σ, Ω̂s, ϵs = NHCES
+    @unpack σ, Ω̂s, ϵs = U
     @argcheck isfinite(Ê) && all(isfinite, p̂s) DomainError
     calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = tol, skipcheck = true)
 end
@@ -100,9 +100,14 @@ $(SIGNATURES)
 
 Calculate **log** sectoral consumptions, return as a vector. Arguments are in logs; see
 [`log_consumption_aggregator`](@ref) which whould also be used to obtain `Ĉ`.
+
+The budget constraint holds, ie
+```julia
+logsumexp(log_sectoral_consumptions(U, p̂s, Ê, Ĉ) .+ p̂s) ≈ Ê
+```
 """
-function log_sectoral_consumptions(NHCES::NonhomotheticCESUtility, p̂s, Ê, Ĉ)
-    @unpack σ, Ω̂s, ϵs = NHCES
+function log_sectoral_consumptions(U::NonhomotheticCESUtility, p̂s, Ê, Ĉ)
+    @unpack σ, Ω̂s, ϵs = U
     Ω̂s .- σ .* (p̂s .- Ê) + ((1 - σ) * Ĉ) .* ϵs
 end
 
