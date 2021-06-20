@@ -21,7 +21,7 @@ function random_parameters(::Val{N}, L = 0.1) where N
     ϵs = rand(SVector{N}) .* 2.0 .+ L
     p̂s = randn(SVector{N})
     Ĉ = rand() * 3.0 + L
-    Ê = logsumexp((Ĉ .* ϵs .+ p̂s) .* (1-σ) .+ Ω̂s)/(1-σ)
+    Ê = logsumexp((Ĉ .* ϵs .+ p̂s) .* (1-σ) .+ Ω̂s) / (1-σ)
     (; Ê, σ, Ω̂s, ϵs, p̂s, Ĉ)
 end
 
@@ -135,15 +135,27 @@ end
     end
 
     @testset "homotheticity" begin
-        @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(2))
-        U = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
-        ν = 1.4
-        Ĉ1 = log_consumption_aggregator(U, p̂s, Ê)
-        Ĉ2 = log_consumption_aggregator(U, p̂s .+ ν, Ê + ν)
-        @test Ĉ1 ≈ Ĉ2 atol = 1e-5
-        @test Ĉ1 ≈ Ĉ atol = 1e-5
-        ĉ1 = log_sectoral_consumptions(U, p̂s, Ê, Ĉ)
-        ĉ2 = log_sectoral_consumptions(U, p̂s .+ ν, Ê + ν, Ĉ)
-        @test ĉ1 ≈ ĉ2 atol = 1e-5
+        for _ in 1:100
+            @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(rand(2:5)))
+            U = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
+            ν = 1.4
+            Ĉ1 = log_consumption_aggregator(U, p̂s, Ê)
+            Ĉ2 = log_consumption_aggregator(U, p̂s .+ ν, Ê + ν)
+            @test Ĉ1 ≈ Ĉ2 atol = 1e-5
+            @test Ĉ1 ≈ Ĉ atol = 1e-5
+            ĉ1 = log_sectoral_consumptions(U, p̂s, Ê, Ĉ)
+            ĉ2 = log_sectoral_consumptions(U, p̂s .+ ν, Ê + ν, Ĉ)
+            @test ĉ1 ≈ ĉ2 atol = 1e-5
+        end
+    end
+
+    @testset "budget constraint" begin
+        for _ in 1:100
+            @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(rand(2:5)))
+            U = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
+            @test Ĉ ≈ log_consumption_aggregator(U, p̂s, Ê) atol = 1e-8
+            ĉs = log_sectoral_consumptions(U, p̂s, Ê, Ĉ)
+            @test logsumexp(ĉs .+ p̂s) ≈ Ê
+        end
     end
 end
