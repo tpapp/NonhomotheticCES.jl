@@ -28,6 +28,8 @@ struct NonhomotheticCESUtility{N,Tσ<:Real,TΩ̂<:Real,Tϵ<:Real}
     end
 end
 
+Broadcast.broadcastable(U::NonhomotheticCESUtility) = Ref(U)
+
 """
 $(SIGNATURES)
 
@@ -35,6 +37,18 @@ Non-homothetic CES preferences, as defined in
 
 *Comin, D., Lashkari, D., & Mestieri, Martí (2021). Structural change with long-run
  income and price effects. Econometrica, 89(1), 311–374.*
+
+### Definition
+
+Let ``E = ∑ᵢ pᵢ Cᵢ`` denote that *total expenditure*. The consumption aggregator `C` is
+defined implicitly by
+
+```math
+E^{1 - \sigma} = \sum_i \Omega_i (C^{\epsilon_i} p_i)^{1- \sigma}
+```
+
+In the actual calculation and parametrization, we use logs (``Ê = log(E)`` etc) for improved
+floating point accuracy.
 
 ### Arguments
 
