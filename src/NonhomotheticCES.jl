@@ -44,7 +44,7 @@ Let ``E = ∑ᵢ pᵢ Cᵢ`` denote that *total expenditure*. The consumption ag
 defined implicitly by
 
 ```math
-E^{1 - \sigma} = \sum_i \Omega_i (C^{\epsilon_i} p_i)^{1- \sigma}
+E^{1 - \\sigma} = \\sum_i \\Omega_i (C^{\\epsilon_i} p_i)^{1 - \\sigma}
 ```
 
 In the actual calculation and parametrization, we use logs (``Ê = log(E)`` etc) for improved
