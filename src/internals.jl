@@ -2,6 +2,53 @@
 #### internal methods, not part of the API
 ####
 
+####
+#### scaled problem
+####
+
+"""
+Given `Ê`, solves
+```math
+Ê = \\log(∑ᵢ \\exp(zᵢ + ϵᵢ Ĉ))
+```
+for `Ĉ`. It is assumed that called does all the sanity checks for parameters.
+
+# Important
+
+The original problem needs to be mapped into this one with
+
+| original problem    | scaled problem |
+|---------------------|----------------|
+| ``(1 - σ) Ê``       | ``Ê``          |
+| ``(1 - σ) Ĉ``       | ``Ĉ``          |
+| ``Ω̂ᵢ + (1 - σ) p̂ᵢ`` | ``zᵢ``         |
+| ``ϵᵢ``              | ``ϵᵢ`` (same)  |
+"""
+struct ScaledProblem{N,Tz<:Real,Tϵ<:Real}
+    zs::SVector{N,Tz}
+    ϵs::SVector{N,Tϵ}
+end
+
+Broadcast.broadcastable(problem::ScaledProblem) = Ref(problem)
+
+function calculate_Ĉ_newton(problem::ScaledProblem, Ê::Real; tol = DEFAULT_TOL, M = 100)
+    @unpack zs, ϵs = problem
+    Ĉ = (Ê - logsumexp(zs)) / mean(ϵs)
+    maxf = (1 + abs(Ê)) * abs(tol)
+    for _ in 1:M
+        x = zs .+ ϵs .* Ĉ
+        f = logsumexp(x) - Ê
+        abs(f) < maxf && return Ĉ
+        X = exp.(x .- maximum(x)) # numerical stability
+        f′ = dot(X, ϵs) / sum(X)
+        Δ = f / f′
+        Ĉ′ = Ĉ - Δ
+        Δ ≠ 0 && Ĉ′ == Ĉ && return Ĉ # no change because abs(Δ) < eps(Ĉ)
+        Ĉ = Ĉ′
+    end
+    error("no solution after $M iterations")
+end
+
 ###
 ### consumption aggregator
 ###
@@ -19,18 +66,9 @@ function check_σ_ϵs(σ, ϵs)
 end
 
 """
-Default tolerance for calculating `Ĉ`.
+Default tolerance for the residual in `Ê = ...` for calculating `Ĉ`.
 """
-const DEFAULT_CTOL = 1e-8
-
-"""
-$(SIGNATURES)
-
-An initial guess for `Ĉ`, to start the bracketing.
-"""
-function guess_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s)
-    (Ê - mean(Ω̂s) / (1 - σ) - mean(p̂s)) / mean(ϵs)
-end
+const DEFAULT_TOL = 1e-10
 
 """
 $(SIGNATURES)
@@ -39,24 +77,19 @@ Calculate `Ĉ` from parameters. `T` is for a separate, conditional dispatch pat
 `ForwardDiff.Dual`.
 """
 function calculate_Ĉ(::Type{T}, Ê, σ, Ω̂s, ϵs, p̂s;
-                     Ĉtol = DEFAULT_CTOL,
+                     tol = DEFAULT_TOL,
                      skipcheck::Bool = false) where {T <: Real}
     skipcheck || check_σ_ϵs(σ, ϵs)
-    f(Ĉ) = logsumexp((Ĉ .* ϵs .+ p̂s) .* (1 - σ) .+ Ω̂s) / (1 - σ) - Ê
-    Ĉ0 = guess_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s)
-    @argcheck isfinite(Ĉ0) "infinite initial guess"
-    Ĉ1, fĈ1, Ĉ2, fĈ2 = bracket_increasing(f, Ĉ0, 1.0, 2.0, 100)
-    Ĉ, r = bisection(f, Ĉ1, fĈ1, Ĉ2, fĈ2, Ĉtol, 100)
-    # FIXME check residual r?
-    Ĉ
+    scaled_problem = ScaledProblem(Ω̂s .+ (1 - σ) .* p̂s, ϵs)
+    calculate_Ĉ_newton(scaled_problem, (1 - σ) * Ê; tol = tol) / (1 - σ)
 end
 
 function calculate_Ĉ(Ê::TÊ, σ::Tσ, Ω̂s::AbstractVector{TΩ̂}, ϵs::AbstractVector{Tϵ},
                      p̂s::AbstractVector{Tp̂};
-                     Ĉtol = DEFAULT_CTOL,
+                     tol = DEFAULT_TOL,
                      skipcheck::Bool = false) where {Tσ,TΩ̂,Tϵ,TÊ,Tp̂}
     T = promote_type(Tσ,TΩ̂,Tϵ,TÊ,Tp̂)
-    calculate_Ĉ(T, Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol, skipcheck)
+    calculate_Ĉ(T, Ê, σ, Ω̂s, ϵs, p̂s; tol, skipcheck)
 end
 
 

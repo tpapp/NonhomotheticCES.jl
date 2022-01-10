@@ -14,7 +14,6 @@ using StaticArrays: SVector
 using Statistics: mean
 using UnPack: @unpack
 
-include("utilities.jl")
 include("internals.jl")
 
 struct NonhomotheticCESUtility{N,Tσ<:Real,TΩ̂<:Real,Tϵ<:Real}
@@ -78,10 +77,10 @@ prices `p̂s` and **log** expenditure `Ê`; within (absolute) tolerance `tol`.
 """
 function log_consumption_aggregator(U::NonhomotheticCESUtility{N,Tσ,TΩ̂,Tϵ},
                                     p̂s::SVector{N,Tp̂}, Ê::TÊ;
-                                    tol = 1e-20) where {N,Tσ,TΩ̂,Tϵ,TÊ,Tp̂}
+                                    tol = DEFAULT_TOL) where {N,Tσ,TΩ̂,Tϵ,TÊ,Tp̂}
     @unpack σ, Ω̂s, ϵs = U
     @argcheck isfinite(Ê) && all(isfinite, p̂s) DomainError
-    calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; Ĉtol = tol, skipcheck = true)
+    calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; tol = tol, skipcheck = true)
 end
 
 function __init__()
@@ -92,10 +91,10 @@ function __init__()
         partials_product(x, y, α = 1) = mapreduce((x, y) -> partials(x) * y * α, +, x, y)
 
         function calculate_Ĉ(::Type{T}, Ê, σ, Ω̂s, ϵs, p̂s;
-                             Ĉtol = DEFAULT_CTOL, skipcheck = false) where {T<:Dual}
+                             tol = DEFAULT_TOL, skipcheck = false) where {T<:Dual}
             vÊ, vσ, vΩ̂s, vϵs, vp̂s = value(Ê), value(σ), value.(Ω̂s), value.(ϵs), value.(p̂s)
             Ĉ = calculate_Ĉ(valtype(T), vÊ, vσ, vΩ̂s, vϵs, vp̂s;
-                            Ĉtol = Ĉtol, skipcheck = skipcheck)
+                            tol = tol, skipcheck = skipcheck)
             Zs, ∑Zϵ = calculate_Zs_∑Zϵ(Ĉ, vÊ, vσ, vΩ̂s, vϵs, vp̂s)
             # NOTE: we could be clever here and only calculate what is actually needed
             ∂p̂s = calculate_∂p̂s(Zs, ∑Zϵ)
