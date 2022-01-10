@@ -65,33 +65,12 @@ end
     @test_throws DomainError NonhomotheticCESUtility(0.1, SVector(1.0, 2.0), SVector(-1.0, 2.0))
 end
 
-@testset "API and AD checks" begin
+@testset "API checks" begin
     @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(2))
-    max_range = min(σ, minimum(ϵs) / 5) * 0.9
     tol = 1e-10
     U = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
     Ĉ2 = @inferred(log_consumption_aggregator(U, p̂s, Ê; tol = tol)) # we compare to this below
     @test newton_relative_residual(; Ĉ = Ĉ2, σ, Ω̂s, ϵs, p̂s, Ê) ≤ tol
-    @testset "directional derivative" begin
-        f(h) = log_consumption_aggregator(NonhomotheticCESUtility(σ + h,
-                                                                  Ω̂s .+ SVector(2h, 3h),
-                                                                  ϵs .+ SVector(4h, 5h)),
-                                          p̂s .+ SVector(8h, 9h), Ê + 7h)
-        v, d = #= @inferred =# fwd_d(f, 0.0) # FIXME inference
-        @test v == Ĉ2
-        @test d ≈ ∂(f; max_range) rtol = 1e-4
-    end
-    @testset "gradient" begin
-        f = h -> log_consumption_aggregator(NonhomotheticCESUtility(σ + h[1],
-                                                                    Ω̂s .+ SVector(h[2], h[3]),
-                                                                    ϵs .+ SVector(h[4], h[5])),
-                                            p̂s .+ SVector(h[7], h[8]),
-                                            Ê + h[6])
-        v, ∇ = @inferred fwd_∇(f, zeros(8))
-        @test v == Ĉ2
-        ∇_fd = [∂(h -> (z = zeros(8); z[i] = h; f(z)); max_range) for i in 1:8]
-        @test norm(∇ .- ∇_fd, Inf) ≤ 1e-5
-    end
 
     @test @inferred(log_sectoral_consumptions(U, p̂s, Ê, Ĉ)) ≈
         @. Ω̂s - σ * (p̂s - Ê) + (1 - σ) * ϵs * Ĉ
@@ -125,6 +104,32 @@ end
             @test logsumexp(ĉs .+ p̂s) ≈ Ê
         end
     end
+end
+
+@testset "directional derivative" begin
+    @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(2))
+    max_range = min(σ, minimum(ϵs) / 5) * 0.9
+    function fh(h)
+        U = NonhomotheticCESUtility(σ + h, Ω̂s .+ SVector(2h, 3h), ϵs .+ SVector(4h, 5h))
+        log_consumption_aggregator(U, p̂s .+ SVector(8h, 9h), Ê + 7h)
+    end
+    v, d = @inferred fwd_d(fh, 0.0)
+    @test v == log_consumption_aggregator(NonhomotheticCESUtility(σ, Ω̂s, ϵs), p̂s, Ê)
+    @test d ≈ ∂(fh; max_range) rtol = 1e-4 atol = 1e-4
+end
+
+@testset "gradient" begin
+    @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(2))
+    max_range = min(σ, minimum(ϵs) / 5) * 0.9
+    f = h -> log_consumption_aggregator(NonhomotheticCESUtility(σ + h[1],
+                                                                Ω̂s .+ SVector(h[2], h[3]),
+                                                                ϵs .+ SVector(h[4], h[5])),
+                                        p̂s .+ SVector(h[7], h[8]),
+                                        Ê + h[6])
+    v, ∇ = @inferred fwd_∇(f, zeros(8))
+    @test v == log_consumption_aggregator(NonhomotheticCESUtility(σ, Ω̂s, ϵs), p̂s, Ê)
+    ∇_fd = [∂(h -> (z = zeros(8); z[i] = h; f(z)); max_range) for i in 1:8]
+    @test norm(∇ .- ∇_fd, Inf) ≤ 1e-5
 end
 
 @testset "collected test cases from previous failures" begin
