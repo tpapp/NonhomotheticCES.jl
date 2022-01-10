@@ -31,14 +31,21 @@ end
 
 Broadcast.broadcastable(problem::ScaledProblem) = Ref(problem)
 
-function calculate_Ĉ_newton(problem::ScaledProblem, Ê::Real; tol = DEFAULT_TOL, M = 100)
+
+"""
+$(SIGNATURES)
+
+Solve the scaled `problem` using Newton's method. `atol` is the absolute tolerance (should
+be positive) between the left and right hand sides, and `M` is the maximum number of
+iterations.
+"""
+function calculate_Ĉ_newton(problem::ScaledProblem, Ê::Real, atol, M = 100)
     @unpack zs, ϵs = problem
     Ĉ = (Ê - logsumexp(zs)) / mean(ϵs)
-    maxf = (1 + abs(Ê)) * abs(tol)
     for _ in 1:M
         x = zs .+ ϵs .* Ĉ
         f = logsumexp(x) - Ê
-        abs(f) < maxf && return Ĉ
+        abs(f) ≤ atol && return Ĉ
         X = exp.(x .- maximum(x)) # numerical stability
         f′ = dot(X, ϵs) / sum(X)
         Δ = f / f′
@@ -70,20 +77,27 @@ Default tolerance for the residual in `Ê = ...` for calculating `Ĉ`.
 """
 const DEFAULT_TOL = 1e-10
 
-"""
-$(SIGNATURES)
-
-Calculate `Ĉ` from parameters. `T` is for a separate, conditional dispatch path to catch
-`ForwardDiff.Dual`.
-"""
+# `T` is for a separate, conditional dispatch path to catch `ForwardDiff.Dual`.
 function calculate_Ĉ(::Type{T}, Ê, σ, Ω̂s, ϵs, p̂s;
                      tol = DEFAULT_TOL,
                      skipcheck::Bool = false) where {T <: Real}
     skipcheck || check_σ_ϵs(σ, ϵs)
     scaled_problem = ScaledProblem(Ω̂s .+ (1 - σ) .* p̂s, ϵs)
-    calculate_Ĉ_newton(scaled_problem, (1 - σ) * Ê; tol = tol) / (1 - σ)
+    atol = (1 + abs(Ê)) * abs(tol)
+    calculate_Ĉ_newton(scaled_problem, (1 - σ) * Ê, atol) / (1 - σ)
 end
 
+"""
+$(SIGNATURES)
+
+Calculate `Ĉ` from parameters.
+
+# Arguments
+
+- `skipcheck`: skip sanity checks
+
+- `tol`: (relative) tolerance, translated to absolute tolerance `(1 + abs(Ê)) * abs(tol)`.
+"""
 function calculate_Ĉ(Ê::TÊ, σ::Tσ, Ω̂s::AbstractVector{TΩ̂}, ϵs::AbstractVector{Tϵ},
                      p̂s::AbstractVector{Tp̂};
                      tol = DEFAULT_TOL,

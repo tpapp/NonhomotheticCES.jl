@@ -25,7 +25,7 @@ Relative residual from the Newton solver, should be `< tol`. For correctness che
 """
 function newton_relative_residual(; Ê, Ω̂s, σ, p̂s, ϵs, Ĉ)
     lhs = logsumexp(@. Ω̂s + (1 - σ) * (p̂s + ϵs * Ĉ))
-    res = (lhs - Ê * (1 - σ)) / (1 + abs(Ê * (1 - σ)))
+    res = (lhs - Ê * (1 - σ)) / (1 + abs(Ê))
 end
 
 "Derivative of (univariate) `f` at `x` (= 0 by default)."

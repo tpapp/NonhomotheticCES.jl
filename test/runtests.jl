@@ -133,7 +133,7 @@ end
         ϵs = SVector(0.41559183742572103, 0.4499184434235435)
         Ê = 0.30482937178846753
         tol = 8.861127361373689e-21
-        Ĉ = @inferred calculate_Ĉ_newton(ScaledProblem(zs, ϵs), Ê; tol = tol)
+        Ĉ = @inferred calculate_Ĉ_newton(ScaledProblem(zs, ϵs), Ê, tol)
         @test isfinite(Ĉ)
     end
 end
