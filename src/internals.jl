@@ -31,12 +31,6 @@ end
 
 Broadcast.broadcastable(problem::ScaledProblem) = Ref(problem)
 
-# workaround for https://github.com/JuliaStats/LogExpFunctions.jl/issues/33
-function _logsumexp(x::SVector)
-    A = maximum(x)
-    log(sum(exp.(x .- A))) + A
-end
-
 """
 $(SIGNATURES)
 
@@ -46,7 +40,7 @@ iterations.
 """
 function calculate_Ĉ_newton(problem::ScaledProblem, Ê::Real, atol, M = 100)
     @unpack zs, ϵs = problem
-    Ĉ = (Ê - _logsumexp(zs)) / mean(ϵs)
+    Ĉ = (Ê - logsumexp(zs)) / mean(ϵs)
     for _ in 1:M
         x = zs .+ ϵs .* Ĉ
         # calculate logsumexp and “weighted softmax” for f′ at the same time
