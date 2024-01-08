@@ -4,7 +4,6 @@ using NonhomotheticCES:         # internals
     calculate_∂p̂s, calculate_∂σ
 
 using Logging
-global_logger(SimpleLogger(stdout, Logging.Debug))
 
 using Test
 using UnPack: @unpack
