@@ -6,7 +6,6 @@ using NonhomotheticCES:         # internals
 using Logging
 
 using Test
-using UnPack: @unpack
 using LinearAlgebra: norm
 
 include("utilities.jl")
@@ -18,7 +17,7 @@ include("utilities.jl")
 @testset "finding Ĉ" begin
     tol = 1e-5
     for _ in 1:100
-        @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(4))
+        (; Ĉ, Ê, σ, Ω̂s, ϵs, p̂s) = random_parameters(Val(4))
         Ĉ2 = @inferred(calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; tol = tol))
         @test newton_relative_residual(; Ê,  σ, Ω̂s, ϵs, p̂s, Ĉ = Ĉ2) ≤ tol
     end
@@ -30,7 +29,7 @@ end
     rtol = 1e-2
     for _ in 1:100
         N = Val{2}()
-        @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(N)
+        (; Ĉ, Ê, σ, Ω̂s, ϵs, p̂s) = random_parameters(N)
         Zs, ∑Zϵ = @inferred calculate_Zs_∑Zϵ(Ĉ, Ê, σ, Ω̂s, ϵs, p̂s)
         ∂p̂s = @inferred calculate_∂p̂s(Zs, ∑Zϵ)
         @test @inferred(calculate_∂Ê(Zs, ∑Zϵ)) ≈
@@ -65,7 +64,7 @@ end
 end
 
 @testset "API checks" begin
-    @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(2))
+    (; Ĉ, Ê, σ, Ω̂s, ϵs, p̂s) = random_parameters(Val(2))
     tol = 1e-10
     U = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
     Ĉ2 = @inferred(log_consumption_aggregator(U, p̂s, Ê; tol = tol)) # we compare to this below
@@ -80,7 +79,7 @@ end
 
     @testset "homotheticity" begin
         for _ in 1:100
-            @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(rand(2:5)))
+            (; Ĉ, Ê, σ, Ω̂s, ϵs, p̂s) = random_parameters(Val(rand(2:5)))
             U = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
             ν = 1.4
             Ĉ1 = log_consumption_aggregator(U, p̂s, Ê)
@@ -95,7 +94,7 @@ end
 
     @testset "budget constraint" begin
         for _ in 1:100
-            @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(rand(2:5)))
+            (; Ĉ, Ê, σ, Ω̂s, ϵs, p̂s) = random_parameters(Val(rand(2:5)))
             U = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
             Ĉ2 = log_consumption_aggregator(U, p̂s, Ê; tol = tol)
             @test newton_relative_residual(; Ĉ = Ĉ2, σ, Ω̂s, ϵs, p̂s, Ê) ≤ tol
@@ -106,7 +105,7 @@ end
 end
 
 @testset "directional derivative" begin
-    @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(2))
+    (; Ĉ, Ê, σ, Ω̂s, ϵs, p̂s) = random_parameters(Val(2))
     max_range = min(σ, minimum(ϵs) / 5) * 0.9
     function fh(h)
         U = NonhomotheticCESUtility(σ + h, Ω̂s .+ SVector(2h, 3h), ϵs .+ SVector(4h, 5h))
@@ -118,7 +117,7 @@ end
 end
 
 @testset "gradient" begin
-    @unpack Ĉ, Ê, σ, Ω̂s, ϵs, p̂s = random_parameters(Val(2))
+    (; Ĉ, Ê, σ, Ω̂s, ϵs, p̂s) = random_parameters(Val(2))
     max_range = min(σ, minimum(ϵs) / 5) * 0.9
     f = h -> log_consumption_aggregator(NonhomotheticCESUtility(σ + h[1],
                                                                 Ω̂s .+ SVector(h[2], h[3]),

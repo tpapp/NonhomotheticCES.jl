@@ -39,7 +39,7 @@ be positive) between the left and right hand sides, and `M` is the maximum numbe
 iterations.
 """
 function calculate_Ĉ_newton(problem::ScaledProblem, Ê::Real, atol, M = 100)
-    @unpack zs, ϵs = problem
+    (; zs, ϵs) = problem
     Ĉ = (Ê - logsumexp(zs)) / mean(ϵs)
     for _ in 1:M
         x = zs .+ ϵs .* Ĉ
