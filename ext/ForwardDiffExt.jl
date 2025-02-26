@@ -3,22 +3,30 @@ module ForwardDiffExt
 using ForwardDiff: Dual, value, partials, valtype
 import NonhomotheticCES
 
-partials_product(x, y, α = 1) = mapreduce((x, y) -> partials(x) * y * α, +, x, y)
+"""
+Helper function for type stable accumulation without explicit initialization.
+"""
+__accum(::Nothing, y) = y
+__accum(x, y) = x + y
 
-function NonhomotheticCES.calculate_Ĉ(::Type{T}, Ê, σ, Ω̂s, ϵs, p̂s;
-                     tol = DEFAULT_TOL, skipcheck = false) where {T<:Dual}
-    vÊ, vσ, vΩ̂s, vϵs, vp̂s = value(Ê), value(σ), value.(Ω̂s), value.(ϵs), value.(p̂s)
-    Ĉ = NonhomotheticCES.calculate_Ĉ(valtype(T), vÊ, vσ, vΩ̂s, vϵs, vp̂s;
-                                     tol = tol, skipcheck = skipcheck)
-    Zs, ∑Zϵ = NonhomotheticCES.calculate_Zs_∑Zϵ(Ĉ, vÊ, vσ, vΩ̂s, vϵs, vp̂s)
-    # NOTE: we could be clever here and only calculate what is actually needed
-    ∂p̂s = NonhomotheticCES.calculate_∂p̂s(Zs, ∑Zϵ)
-    dĈ = (partials(Ê) * NonhomotheticCES.calculate_∂Ê(Zs, ∑Zϵ) +                    # ∂Ê
-        partials(σ) * NonhomotheticCES.calculate_∂σ(Zs, ∑Zϵ, Ĉ, vÊ, vσ, vϵs, vp̂s) + # ∂σ
-        partials_product(Ω̂s, ∂p̂s, inv(1 - vσ)) +                                    # ∂Ω̂
-        partials_product(ϵs, ∂p̂s, Ĉ) + # ∂ϵs
-        partials_product(p̂s, ∂p̂s))     # ∂p̂s
-    T(Ĉ, dĈ)
+function NonhomotheticCES.typed_newton_solver(::Type{T}, a, ϵ, x, N, y0) where {T<:Dual}
+    vx, vy0, va, vϵ = value(x), value(y0), value.(a), value.(ϵ)
+    vy = NonhomotheticCES.typed_newton_solver(valtype(T), va, vϵ, vx, N, vy0)
+    dy = nothing
+    Z, ∑Zϵ = NonhomotheticCES.calculate_Z_∑Zϵ(va, vϵ, vy)
+    if x isa Dual
+        dy = __accum(dy, partials(x) * NonhomotheticCES.calculate_∂x(Z, ∑Zϵ))
+    end
+    if eltype(a) <: Dual || eltype(ϵ) <: Dual
+        D = NonhomotheticCES.calculate_∂a(Z, ∑Zϵ)
+        if eltype(a) <: Dual
+            dy = __accum(dy, mapreduce((a, d) -> partials(a) * d, +, a, D))
+        end
+        if eltype(ϵ) <: Dual
+            dy = __accum(dy, mapreduce((ϵ, d) -> partials(ϵ) * vy * d, +, ϵ, D))
+        end
+    end
+    T(vy, dy)
 end
 
 end

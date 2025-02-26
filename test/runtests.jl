@@ -1,142 +1,177 @@
-using NonhomotheticCES
+using NonhomotheticCES, Test, LogExpFunctions, StaticArrays, FiniteDifferences
 using NonhomotheticCES:         # internals
-    ScaledProblem, calculate_Ĉ_newton, calculate_Ĉ, calculate_Zs_∑Zϵ, calculate_∂Ê,
-    calculate_∂p̂s, calculate_∂σ
-
-using Logging
-
-using Test
-using LinearAlgebra: norm
-
-include("utilities.jl")
+    calculate_Z_∑Zϵ, calculate_∂x, calculate_∂a, newton_solver, ScaledProblem,
+    PrecalculatedProblem, tangents_envelope, calculate_envelope5, rhs_and_dydx
+import Random, ForwardDiff
+Random.seed!(0x3b1ac7d1ef4ad7c3eab4e377ca14b76c) # consistent test runs
 
 ####
-#### internals
+#### utilities for tests
 ####
 
-@testset "finding Ĉ" begin
-    tol = 1e-5
-    for _ in 1:100
-        (; Ĉ, Ê, σ, Ω̂s, ϵs, p̂s) = random_parameters(Val(4))
-        Ĉ2 = @inferred(calculate_Ĉ(Ê, σ, Ω̂s, ϵs, p̂s; tol = tol))
-        @test newton_relative_residual(; Ê,  σ, Ω̂s, ϵs, p̂s, Ĉ = Ĉ2) ≤ tol
+"""
+Random parameters with `N` sectors. `L` is added to positive parameters, to bound away from
+`0`. For unit testing.
+"""
+function random_parameters(::Val{N}, L = 0.1) where N
+    σ = rand() * 2.0 .+ L
+    Ω̂ = randn(SVector{N})
+    ϵ = rand(SVector{N}) .* 2.0 .+ L
+    p̂ = randn(SVector{N})
+    Ĉ = rand() * 3.0 + L
+    Ê = logsumexp((Ĉ .* ϵ .+ p̂) .* (1-σ) .+ Ω̂) / (1-σ)
+    (; Ê, σ, Ω̂, ϵ, p̂, Ĉ)
+end
+
+"""
+Relative residual from the Newton solver, should be `< tol`. For correctness checks.
+"""
+function newton_relative_residual(; Ê, Ω̂, σ, p̂, ϵ, Ĉ)
+    lhs = logsumexp(@. Ω̂ + (1 - σ) * (p̂ + ϵ * Ĉ))
+    res = (lhs - Ê * (1 - σ)) / (1 + abs(Ê))
+end
+
+"Derivative of (univariate) `f` at `x` (= 0 by default)."
+const DD = central_fdm(5, 1; factor = 1e6)
+
+####
+#### internals tests
+####
+
+_residual(P::ScaledProblem, x, y) = logsumexp(P.a .+ P.ϵ .* y) - x
+
+@testset "rhs_and_dydx" begin
+    for _ in 1:1000
+        # create a ScaledProblem with random size and parameters
+        N = rand(2:5)
+        a = randn(SVector{N})
+        ϵ = max.(rand(SVector{N}) .* 2, 1e-7)
+        y = randn() * 10
+        rhs, dydx = rhs_and_dydx(a, ϵ, y)
+        Ba = BigFloat.(a)
+        Bϵ = BigFloat.(ϵ)
+        By = BigFloat(y)
+        Brhs = logsumexp(@. Ba + Bϵ * By)
+        @test rhs ≈ Brhs
+        Bdydx = 1 / DD(By -> logsumexp(@. Ba + Bϵ * By), By)
+        @test dydx ≈ Bdydx
     end
 end
 
-@testset "partials building blocks" begin
+@testset "scaled problem building" begin
+    for _ in 1:100
+        # create a ScaledProblem with random size and parameters
+        N = rand(2:5)
+        a = randn(SVector{N})
+        ϵ = max.(rand(SVector{N}) .* 2, 1e-7)
+        P = ScaledProblem(a, ϵ)
+        PP = PrecalculatedProblem(P, calculate_envelope5(P))
+        # test asymptotics
+        xL = 1e5
+        @test _residual(P, xL, tangents_envelope(PP.tangents, xL)) ≤ 1e-8
+        @test _residual(P, -xL, tangents_envelope(PP.tangents, -xL)) ≤ 1e-8
+        # test solver at random points
+        for _ in 1:100
+            x = randn() * 10
+            # test Newton solver residuals
+            y = newton_solver(PP, x, 5)
+            @test _residual(P, x, y) ≤ 1e-4
+            # if _residual(P, x, y) > 1e-4
+            #     @show P x y
+            # end
+        end
+    end
+end
+
+@testset "partials building blocks and AD of scaled problem" begin
     tol = 1e-10
     atol = 1e-2
     rtol = 1e-2
     for _ in 1:100
-        N = Val{2}()
-        (; Ĉ, Ê, σ, Ω̂s, ϵs, p̂s) = random_parameters(N)
-        Zs, ∑Zϵ = @inferred calculate_Zs_∑Zϵ(Ĉ, Ê, σ, Ω̂s, ϵs, p̂s)
-        ∂p̂s = @inferred calculate_∂p̂s(Zs, ∑Zϵ)
-        @test @inferred(calculate_∂Ê(Zs, ∑Zϵ)) ≈
-            ∂(h -> calculate_Ĉ(Ê + h, σ, Ω̂s, ϵs, p̂s; tol = tol)) atol = atol rtol = rtol
-        for (j, ∂p̂) in pairs(∂p̂s)
-            ∂p̂_fd = ∂(h -> calculate_Ĉ(Ê, σ, Ω̂s, ϵs, add_at(p̂s, j, h); tol = tol))
-            @test ∂p̂ ≈ ∂p̂_fd atol = atol rtol = rtol
+        N = 2
+        a = randn(SVector{N})
+        ϵ = rand(SVector{N}) .+ 0.1
+        y = randn()
+        x = logsumexp(@. a + ϵ * y)
+        Z, ∑Zϵ = @inferred calculate_Z_∑Zϵ(a, ϵ, y)
+        ∂x = @inferred calculate_∂x(Z, ∑Zϵ)
+        ∂a = @inferred calculate_∂a(Z, ∑Zϵ)
+
+        let P = ScaledProblem(a, ϵ), f = x -> newton_solver(P, x, 10, 0.0)
+            @test ∂x ≈ DD(f, x)
+            @test ∂x ≈ @inferred ForwardDiff.derivative(f, x)
         end
-        for (j, ∂ϵ) in pairs(∂p̂s .* Ĉ)
-            ∂ϵ_fd = ∂(h -> calculate_Ĉ(Ê, σ, Ω̂s, add_at(ϵs, j, h), p̂s; tol = tol);
-                      max_range = ϵs[j] * 0.9)
-            @test ∂ϵ ≈ ∂ϵ_fd atol = atol rtol = rtol
+        let x = x, ϵ = ϵ, f = a -> newton_solver(ScaledProblem(a, ϵ), x, 10, 0.0)
+            @test ∂a ≈ grad(DD, f, a)[1]
+            @test ∂a ≈ @inferred ForwardDiff.gradient(f, a)
         end
-        for (j, ∂Ω̂) in pairs(∂p̂s ./ (1 - σ))
-            ∂Ω̂_fd = ∂(h -> calculate_Ĉ(Ê, σ, add_at(Ω̂s, j, h), ϵs, p̂s; tol = tol))
-            @test ∂Ω̂ ≈ ∂Ω̂_fd atol = atol rtol = rtol
+        let x = x, a = a, f = ϵ -> newton_solver(ScaledProblem(a, ϵ), x, 10, 0.0)
+            ∂ϵ = ∂a .* y
+            @test ∂ϵ ≈ grad(DD, f, ϵ)[1]
+            @test ∂ϵ ≈ @inferred ForwardDiff.gradient(f, ϵ)
         end
-        @test calculate_∂σ(Zs, ∑Zϵ, Ĉ, Ê, σ, ϵs, p̂s) ≈
-            ∂(h -> calculate_Ĉ(Ê, σ + h, Ω̂s, ϵs, p̂s; tol = tol);
-              max_range = σ * 0.9) atol = atol rtol = rtol
     end
 end
 
 ####
-#### API and Forwarddiff
+#### API and AD tests
 ####
 
 @testset "argument checks" begin
-    @test_throws DomainError NonhomotheticCESUtility(-0.1, SVector(1.0, 2.0), SVector(1.0, 2.0))
-    @test_throws DomainError NonhomotheticCESUtility(1, SVector(1.0, 2.0), SVector(1.0, 2.0))
-    @test_throws DomainError NonhomotheticCESUtility(0.1, SVector(1.0, 2.0), SVector(-1.0, 2.0))
+    @test_throws DomainError NonhomotheticCESUtility(-0.1, SVector(1.0, 2.0),
+                                                     SVector(1.0, 2.0))
+    @test_throws DomainError NonhomotheticCESUtility(1, SVector(1.0, 2.0),
+                                                     SVector(1.0, 2.0))
+    @test_throws DomainError NonhomotheticCESUtility(0.1, SVector(1.0, 2.0),
+                                                     SVector(-1.0, 2.0))
+end
+
+
+@testset "finding Ĉ" begin
+    tol = 1e-5
+    for _ in 1:100
+        (; Ĉ, Ê, σ, Ω̂, ϵ, p̂) = random_parameters(Val(4))
+        U = NonhomotheticCESUtility(σ, Ω̂, ϵ)
+        Ĉ2 = @inferred log_consumption_aggregator(U, p̂, Ê)
+        @test newton_relative_residual(; Ê,  σ, Ω̂, ϵ, p̂, Ĉ = Ĉ2) ≤ tol
+    end
+end
+
+@testset "homotheticity" begin
+    for _ in 1:100
+        (; Ĉ, Ê, σ, Ω̂, ϵ, p̂) = random_parameters(Val(rand(2:5)))
+        U = NonhomotheticCESUtility(σ, Ω̂, ϵ)
+        ν = 1.4
+        Ĉ1 = log_consumption_aggregator(U, p̂, Ê)
+        Ĉ2 = log_consumption_aggregator(U, p̂ .+ ν, Ê + ν)
+        @test Ĉ1 ≈ Ĉ2 atol = 1e-5
+        @test Ĉ1 ≈ Ĉ atol = 1e-5
+        ĉ1 = log_sectoral_consumptions(U, p̂, Ê, Ĉ)
+        ĉ2 = log_sectoral_consumptions(U, p̂ .+ ν, Ê + ν, Ĉ)
+        @test ĉ1 ≈ ĉ2 atol = 1e-5
+    end
 end
 
 @testset "API checks" begin
-    (; Ĉ, Ê, σ, Ω̂s, ϵs, p̂s) = random_parameters(Val(2))
+    (; Ĉ, Ê, σ, Ω̂, ϵ, p̂) = random_parameters(Val(2))
     tol = 1e-10
-    U = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
-    Ĉ2 = @inferred(log_consumption_aggregator(U, p̂s, Ê; tol = tol)) # we compare to this below
-    @test newton_relative_residual(; Ĉ = Ĉ2, σ, Ω̂s, ϵs, p̂s, Ê) ≤ tol
+    U = NonhomotheticCESUtility(σ, Ω̂, ϵ)
+    Ĉ2 = @inferred(log_consumption_aggregator(U, p̂, Ê)) # we compare to this below
+    @test newton_relative_residual(; Ĉ = Ĉ2, σ, Ω̂, ϵ, p̂, Ê) ≤ tol
+    @test @inferred(log_sectoral_consumptions(U, p̂, Ê, Ĉ)) ≈
+        @. Ω̂ - σ * (p̂ - Ê) + (1 - σ) * ϵ * Ĉ
 
-    @test @inferred(log_sectoral_consumptions(U, p̂s, Ê, Ĉ)) ≈
-        @. Ω̂s - σ * (p̂s - Ê) + (1 - σ) * ϵs * Ĉ
-
-    @testset "non-finite inputs" begin
-        @test_throws DomainError log_consumption_aggregator(U, p̂s, -Inf)
-    end
-
-    @testset "homotheticity" begin
-        for _ in 1:100
-            (; Ĉ, Ê, σ, Ω̂s, ϵs, p̂s) = random_parameters(Val(rand(2:5)))
-            U = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
-            ν = 1.4
-            Ĉ1 = log_consumption_aggregator(U, p̂s, Ê)
-            Ĉ2 = log_consumption_aggregator(U, p̂s .+ ν, Ê + ν)
-            @test Ĉ1 ≈ Ĉ2 atol = 1e-5
-            @test Ĉ1 ≈ Ĉ atol = 1e-5
-            ĉ1 = log_sectoral_consumptions(U, p̂s, Ê, Ĉ)
-            ĉ2 = log_sectoral_consumptions(U, p̂s .+ ν, Ê + ν, Ĉ)
-            @test ĉ1 ≈ ĉ2 atol = 1e-5
-        end
-    end
+    @test_throws DomainError log_consumption_aggregator(U, p̂, -Inf)
+    @test_throws DomainError log_consumption_aggregator(U, SVector(-Inf, 1.0), 1.0)
 
     @testset "budget constraint" begin
         for _ in 1:100
-            (; Ĉ, Ê, σ, Ω̂s, ϵs, p̂s) = random_parameters(Val(rand(2:5)))
-            U = NonhomotheticCESUtility(σ, Ω̂s, ϵs)
-            Ĉ2 = log_consumption_aggregator(U, p̂s, Ê; tol = tol)
-            @test newton_relative_residual(; Ĉ = Ĉ2, σ, Ω̂s, ϵs, p̂s, Ê) ≤ tol
-            ĉs = log_sectoral_consumptions(U, p̂s, Ê, Ĉ)
-            @test logsumexp(ĉs .+ p̂s) ≈ Ê
+            (; Ĉ, Ê, σ, Ω̂, ϵ, p̂) = random_parameters(Val(rand(2:5)))
+            U = NonhomotheticCESUtility(σ, Ω̂, ϵ)
+            Ĉ2 = log_consumption_aggregator(U, p̂, Ê)
+            @test newton_relative_residual(; Ĉ = Ĉ2, σ, Ω̂, ϵ, p̂, Ê) ≤ tol
+            ĉ = log_sectoral_consumptions(U, p̂, Ê, Ĉ)
+            @test logsumexp(ĉ .+ p̂) ≈ Ê
         end
-    end
-end
-
-@testset "directional derivative" begin
-    (; Ĉ, Ê, σ, Ω̂s, ϵs, p̂s) = random_parameters(Val(2))
-    max_range = min(σ, minimum(ϵs) / 5) * 0.9
-    function fh(h)
-        U = NonhomotheticCESUtility(σ + h, Ω̂s .+ SVector(2h, 3h), ϵs .+ SVector(4h, 5h))
-        log_consumption_aggregator(U, p̂s .+ SVector(8h, 9h), Ê + 7h)
-    end
-    v, d = @inferred fwd_d(fh, 0.0)
-    @test v == log_consumption_aggregator(NonhomotheticCESUtility(σ, Ω̂s, ϵs), p̂s, Ê)
-    @test d ≈ ∂(fh; max_range) rtol = 1e-4 atol = 1e-4
-end
-
-@testset "gradient" begin
-    (; Ĉ, Ê, σ, Ω̂s, ϵs, p̂s) = random_parameters(Val(2))
-    max_range = min(σ, minimum(ϵs) / 5) * 0.9
-    f = h -> log_consumption_aggregator(NonhomotheticCESUtility(σ + h[1],
-                                                                Ω̂s .+ SVector(h[2], h[3]),
-                                                                ϵs .+ SVector(h[4], h[5])),
-                                        p̂s .+ SVector(h[7], h[8]),
-                                        Ê + h[6])
-    v, ∇ = @inferred fwd_∇(f, zeros(8))
-    @test v == log_consumption_aggregator(NonhomotheticCESUtility(σ, Ω̂s, ϵs), p̂s, Ê)
-    ∇_fd = [∂(h -> (z = zeros(8); z[i] = h; f(z)); max_range) for i in 1:8]
-    @test norm(∇ .- ∇_fd, Inf) ≤ 1e-5
-end
-
-@testset "collected test cases from previous failures" begin
-    @testset "abs(Δ) < eps(Ĉ) nonconvergence" begin
-        zs = SVector(1.0358525676185755, 1.2562213779011235)
-        ϵs = SVector(0.41559183742572103, 0.4499184434235435)
-        Ê = 0.30482937178846753
-        tol = 8.861127361373689e-21
-        Ĉ = @inferred calculate_Ĉ_newton(ScaledProblem(zs, ϵs), Ê, tol)
-        @test isfinite(Ĉ)
     end
 end
