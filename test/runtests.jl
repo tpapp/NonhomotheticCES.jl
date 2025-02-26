@@ -175,3 +175,15 @@ end
         end
     end
 end
+
+####
+#### automated QA
+####
+
+import Aqua
+Aqua.test_all(NonhomotheticCES;
+              # cf https://github.com/JuliaTesting/Aqua.jl/issues/325
+              unbound_args = false)
+
+import JET
+JET.report_package("NonhomotheticCES")
