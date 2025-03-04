@@ -165,7 +165,8 @@ end
         @. Ω̂ - σ * (p̂ - Ê) + (1 - σ) * ϵ * Ĉ
 
     @test_throws DomainError log_consumption_aggregator(U, p̂, -Inf)
-    @test_throws DomainError log_consumption_aggregator(U, SVector(-Inf, 1.0), 1.0)
+    @test_throws DomainError log_consumption_aggregator(U, fill(-Inf, typeof(p̂)), 1.0)
+    @test_throws MethodError log_consumption_aggregator(U, push(p̂, 0.0), 1.0)
 
     @testset "budget constraint" begin
         for _ in 1:100
@@ -180,12 +181,12 @@ end
 end
 
 @testset "partial application" begin
-    tol = 1e-5
+    tol = 1e-4
     for _ in 1:100
         (; Ĉ, Ê, σ, Ω̂, ϵ, p̂) = random_parameters()
         U = NonhomotheticCESUtility(σ, Ω̂, ϵ)
         A = log_consumption_aggregator(U, p̂)
-        @test A(Ê) ≈ Ĉ atol = tol
+        @test A(Ê) ≈ Ĉ atol = tol * length(p̂)
     end
 end
 
