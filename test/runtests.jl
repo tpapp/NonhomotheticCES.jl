@@ -10,10 +10,13 @@ Random.seed!(0x3b1ac7d1ef4ad7c3eab4e377ca14b76c) # consistent test runs
 ####
 
 """
-Random parameters with `N` sectors. `L` is added to positive parameters, to bound away from
-`0`. For unit testing.
+Random parameters with `N` sectors (itself randomly chosen).
+
+`L` is added to positive parameters, to bound away from `0`.
+
+For unit testing.
 """
-function random_parameters(N, L = 0.1)
+function random_parameters(N = rand(2:5), L = 0.1)
     σ = rand() * 2.0 .+ L
     Ω̂ = randn(SVector{N})
     ϵ = rand(SVector{N}) .* 2.0 .+ L
@@ -130,7 +133,7 @@ end
 @testset "finding Ĉ" begin
     tol = 1e-5
     for _ in 1:100
-        (; Ĉ, Ê, σ, Ω̂, ϵ, p̂) = random_parameters(4)
+        (; Ĉ, Ê, σ, Ω̂, ϵ, p̂) = random_parameters()
         U = NonhomotheticCESUtility(σ, Ω̂, ϵ)
         Ĉ2 = @inferred log_consumption_aggregator(U, p̂, Ê)
         @test newton_relative_residual(; Ê,  σ, Ω̂, ϵ, p̂, Ĉ = Ĉ2) ≤ tol
@@ -139,7 +142,7 @@ end
 
 @testset "homotheticity" begin
     for _ in 1:100
-        (; Ĉ, Ê, σ, Ω̂, ϵ, p̂) = random_parameters(rand(2:5))
+        (; Ĉ, Ê, σ, Ω̂, ϵ, p̂) = random_parameters()
         U = NonhomotheticCESUtility(σ, Ω̂, ϵ)
         ν = 1.4
         Ĉ1 = log_consumption_aggregator(U, p̂, Ê)
@@ -153,7 +156,7 @@ end
 end
 
 @testset "API checks" begin
-    (; Ĉ, Ê, σ, Ω̂, ϵ, p̂) = random_parameters(2)
+    (; Ĉ, Ê, σ, Ω̂, ϵ, p̂) = random_parameters()
     tol = 1e-10
     U = NonhomotheticCESUtility(σ, Ω̂, ϵ)
     Ĉ2 = @inferred(log_consumption_aggregator(U, p̂, Ê)) # we compare to this below
@@ -166,7 +169,7 @@ end
 
     @testset "budget constraint" begin
         for _ in 1:100
-            (; Ĉ, Ê, σ, Ω̂, ϵ, p̂) = random_parameters(rand(2:5))
+            (; Ĉ, Ê, σ, Ω̂, ϵ, p̂) = random_parameters()
             U = NonhomotheticCESUtility(σ, Ω̂, ϵ)
             Ĉ2 = log_consumption_aggregator(U, p̂, Ê)
             @test newton_relative_residual(; Ĉ = Ĉ2, σ, Ω̂, ϵ, p̂, Ê) ≤ tol
@@ -179,7 +182,7 @@ end
 @testset "partial application" begin
     tol = 1e-5
     for _ in 1:100
-        (; Ĉ, Ê, σ, Ω̂, ϵ, p̂) = random_parameters(2)
+        (; Ĉ, Ê, σ, Ω̂, ϵ, p̂) = random_parameters()
         U = NonhomotheticCESUtility(σ, Ω̂, ϵ)
         A = log_consumption_aggregator(U, p̂)
         @test A(Ê) ≈ Ĉ atol = tol
