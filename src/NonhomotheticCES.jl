@@ -247,9 +247,9 @@ $(SIGNATURES)
 
 A [`ScaledProblem`](@ref) with some precalculated quantities to speed up the solution.
 """
-Base.@kwdef struct PrecalculatedProblem{N,M,TA<:Real,TE<:Real,TT<:Real}
+Base.@kwdef struct PrecalculatedProblem{N,M,TA<:Real,TE<:Real,TT<:NTuple{M}}
     P::ScaledProblem{N,TA,TE}
-    tangents::NTuple{M,Tangent{TT}}
+    tangents::TT
 end
 
 """
@@ -281,11 +281,11 @@ Calculate the envelope of intersecting the two asymptotes, fitting a tangent at 
 coordinate, then repeating it with each pair. Yields a total of 5 tangents and provides
 a good initial guess.
 """
-function calculate_envelope5(P::ScaledProblem; N = 5)
+function calculate_envelope5(P::ScaledProblem; newton_steps = 5)
     t1, t2 = calculate_asymptotes(P)
     function _tangent_at_intersection(tA, tB, tangents)
         xc = calculate_intersection_x(t1, t2)
-        yc = newton_solver(P, xc, N, tangents_envelope(tangents, xc))
+        yc = newton_solver(P, xc, newton_steps, tangents_envelope(tangents, xc))
         calculate_tangent(P, yc)
     end
     # tangent at intersection of t1 and t2
@@ -296,12 +296,12 @@ function calculate_envelope5(P::ScaledProblem; N = 5)
     (t1, t2, tc, tc1, tc2)
 end
 
-function newton_solver(PP::PrecalculatedProblem, x::Real, N,
+function newton_solver(PP::PrecalculatedProblem, x::Real, newton_steps,
                        y::Real = tangents_envelope(PP.tangents, x))
-    newton_solver(PP.P, x, N, y)
+    newton_solver(PP.P, x, newton_steps, y)
 end
 
-const NEWTON_STEPS = 4
+const NEWTON_STEPS = 6
 
 """
 $(SIGNATURES)
@@ -309,9 +309,8 @@ $(SIGNATURES)
 Calculate the **log** consumption aggregator for the given utility, with **log** sector
 prices `p̂` and **log** expenditure `Ê`; within (absolute) tolerance `tol`.
 """
-function log_consumption_aggregator(U::NonhomotheticCESUtility{N,Tσ,TΩ̂,Tϵ},
-                                    p̂::SVector{N,Tp̂}, Ê::TÊ;
-                                    newton_steps = 6) where {N,Tσ,TΩ̂,Tϵ,TÊ,Tp̂}
+function log_consumption_aggregator(U::NonhomotheticCESUtility{N}, p̂::SVector{N}, Ê::Real;
+                                    newton_steps = NEWTON_STEPS) where {N}
     @argcheck all(isfinite, p̂) DomainError
     @argcheck isfinite(Ê) DomainError
     (; σ, Ω̂, ϵ) = U

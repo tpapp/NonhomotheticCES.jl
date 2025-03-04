@@ -181,9 +181,7 @@ end
 ####
 
 import Aqua
-Aqua.test_all(NonhomotheticCES;
-              # cf https://github.com/JuliaTesting/Aqua.jl/issues/325
-              unbound_args = false)
+Aqua.test_all(NonhomotheticCES)
 
 import JET
 JET.report_package("NonhomotheticCES")
