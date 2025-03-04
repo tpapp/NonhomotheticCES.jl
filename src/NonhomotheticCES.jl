@@ -322,6 +322,45 @@ function log_consumption_aggregator(U::NonhomotheticCESUtility{N}, p̂::SVector{
     y / (1 - σ)
 end
 
+struct LogConsumptionAggregatorFix{TU,TP,TPP}
+    U::TU
+    p̂::TP
+    PP::TPP
+    newton_steps::Int
+end
+
+####
+#### partial application
+####
+
+"""
+$(SIGNATURES)
+
+Partial application version. Uses more precalculated steps and fewer Newton steps,
+customize as needed.
+"""
+function log_consumption_aggregator(U::NonhomotheticCESUtility{N}, p̂::SVector{N};
+                                    precalculation_newton_steps = NEWTON_STEPS,
+                                    newton_steps = ceil(Int, precalculation_newton_steps / 2)) where {N}
+    @argcheck all(isfinite, p̂) DomainError
+    (; σ, Ω̂, ϵ) = U
+    a = @. Ω̂ + (1 - σ) * p̂
+    P = ScaledProblem(a, ϵ)
+    tangents = calculate_envelope5(P; newton_steps)
+    PP = PrecalculatedProblem(P, tangents)
+    LogConsumptionAggregatorFix(U, p̂, PP, newton_steps)
+end
+
+function (F::LogConsumptionAggregatorFix)(Ê::Real)
+    @argcheck isfinite(Ê)
+    (; U, PP, newton_steps) = F
+    (; σ) = U
+    x = (1 - σ) * Ê
+    y = newton_solver(PP, x, newton_steps)
+    y / (1 - σ)
+end
+
+
 """
 $(SIGNATURES)
 

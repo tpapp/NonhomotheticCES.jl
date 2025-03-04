@@ -176,6 +176,16 @@ end
     end
 end
 
+@testset "partial application" begin
+    tol = 1e-5
+    for _ in 1:100
+        (; Ĉ, Ê, σ, Ω̂, ϵ, p̂) = random_parameters(Val(2))
+        U = NonhomotheticCESUtility(σ, Ω̂, ϵ)
+        A = log_consumption_aggregator(U, p̂)
+        @test A(Ê) ≈ Ĉ atol = tol
+    end
+end
+
 ####
 #### automated QA
 ####
