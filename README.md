@@ -18,11 +18,22 @@ U = NonhomotheticCESUtility(σ,  # σ
                             ϵs) # sectoral ϵs
 
 Ĉ = log_consumption_aggregator(U,
-                               Ê,  # LOG expenditure
-                               p̂s) # LOG prices
+                               p̂s, # LOG prices
+                               Ê)  # LOG expenditure
 
-ĉs = log_sectoral_consumptions(U, Ê, p̂s, Ĉ)
+ĉs = log_sectoral_consumptions(U, p̂s, Ê, Ĉ)
 ```
+
+The API uses a Newton solver with a good initial guess and a **fixed number of steps**, which helps with smoothness of the result (at the cost of accuracy). If you really, really need accuracy to the last [ulp](https://en.wikipedia.org/wiki/Unit_in_the_last_place), just use more steps.
+
+There is a partial application version that calculates an even better initial guess, using fewer Newton steps later on by default:
+
+```julia
+A = log_consumption_aggregator(U, p̂s)
+Ĉ = A(Ê)
+```
+
+See the docstrings for the details.
 
 ## Integrations
 
