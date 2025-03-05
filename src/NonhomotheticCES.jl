@@ -215,6 +215,8 @@ struct Tangent{T}
     slope::T
 end
 
+Tangent(location, slope) = Tangent(promote(location, slope)...)
+
 (t::Tangent)(x) = (x - t.location) * t.slope
 
 """
@@ -230,12 +232,16 @@ end
 """
 $(SIGNATURES)
 
-Calculate the `x` coordinate of the intersection of two tangents.
+Calculate the `x` coordinate of the intersection of two tangents. Note: if the two
+slopes are too close, it uses the midpoint of locations.
 """
 function calculate_intersection_x(a::Tangent, b::Tangent)
     denom = a.slope - b.slope
-    @argcheck denom ≠ 0
-    (a.location * a.slope - b.location * b.slope) / denom
+    if abs(denom) < √eps(denom)
+        (a.location + b.location) / 2
+    else
+        (a.location * a.slope - b.location * b.slope) / denom
+    end
 end
 
 ####
