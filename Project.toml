@@ -1,7 +1,7 @@
 name = "NonhomotheticCES"
 uuid = "19fc8792-2b89-4883-9e85-8362bf055f3f"
 authors = ["Tamas K. Papp <tkpapp@gmail.com>"]
-version = "0.3.1"
+version = "0.3.2"
 
 [deps]
 ArgCheck = "dce04be8-c92d-5529-be00-80e4d2c0e197"
