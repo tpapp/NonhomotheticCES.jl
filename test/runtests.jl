@@ -198,4 +198,4 @@ import Aqua
 Aqua.test_all(NonhomotheticCES)
 
 import JET
-JET.report_package("NonhomotheticCES")
+JET.report_package(NonhomotheticCES)
